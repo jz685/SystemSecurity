@@ -13,22 +13,25 @@ public class Mallory extends Thread{
     public static boolean still_receiving;
     private static Lock q_lock;
 
+ 
     public void run() {
         System.out.println("Thread Started");
         BufferedReader bufferReader = new BufferedReader(new InputStreamReader(System.in));
         String userInput;
+        boolean waiting = true;
 
         try {
             while(still_receiving) {
                 q_lock.lock();
                 if (!unread_q.isEmpty()) {
+                    waiting = false;
                     //Get next unread message
                     String nextMessage = unread_q.remove();
                     message_list.add(nextMessage);
                     q_lock.unlock();
 
                     //Print message
-                    System.out.println("Showing next message:");
+                    System.out.println("Showing next unread message:");
                     System.out.println(nextMessage);
 
                     //Wait until told what to do about the message
@@ -51,9 +54,43 @@ public class Mallory extends Thread{
                         }
                     }
                 }
+                else if (waiting == false) {
+                    q_lock.unlock();
+                    int saved_size = message_list.size();
+                    if (saved_size == 0) {
+                        continue;
+                    }
+                    System.out.println("There are no unread messages for you to view.  Type s to view a saved one or w to wait for a new message.");
+                    userInput = bufferReader.readLine();
+                    if (userInput.equalsIgnoreCase("s")) {
+                        boolean got_num = false;
+                        int read_num = -1;
+                        while (!got_num) {
+                            System.out.println("Type a number between 0 and " + (message_list.size()-1) + " inclusive to view the corresponding message.");
+                            userInput = bufferReader.readLine();
+                            try {
+                                read_num = Integer.parseInt(userInput);
+                                if (read_num < 0 || read_num >= message_list.size()) {
+                                    System.out.println("Error: You did not enter a number in the proper range.  Try again.");
+                                }
+                                else {
+                                    System.out.println("Printing out message number " + read_num + ":");
+                                    System.out.println(message_list.get(read_num));
+                                    got_num = true;
+                                }
+                            }
+                            catch (NumberFormatException e) {
+                                System.out.println("Error: You did not enter a number.  Try again.");
+                            }
+                        }
+                    }
+                    else if (userInput.equalsIgnoreCase("w")) {
+                        System.out.println("Ok, we will wait until a message arrives");
+                        waiting = true;
+                    }
+                }
                 else {
                     q_lock.unlock();
-                    //print out asking
                 }
             }
         }
@@ -165,15 +202,6 @@ public class Mallory extends Thread{
             q_lock.lock();
             unread_q.add(inputLine);
             q_lock.unlock();
-
-            //System.out.println("Incoming Message: " + inputLine);
-            //System.out.println("Please choose to read/modify/delete the message: ");
-            //String userInput = bufferReader.readLine(); 
-            
-            //outputWriter.println(userInput);
-            //if (inputLine == "Quit") {
-            //    break;
-            //}
         }
         still_receiving = false;
         outputWriter.close();
