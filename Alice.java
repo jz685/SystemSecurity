@@ -1,6 +1,17 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.security.*;
+import java.security.spec.*;
+import java.security.spec.EncodedKeySpec.*;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class Alice {
 

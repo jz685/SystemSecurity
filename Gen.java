@@ -72,6 +72,7 @@ public class Gen {
 			// System.out.println("Public Key Algorithm is: " + pub.getAlgorithm() + ", and the value is: " + pub.getFormat())
         } catch (Exception e) {
             System.err.println("Caught exception " + e.toString());
+            return;
         }
     }
 

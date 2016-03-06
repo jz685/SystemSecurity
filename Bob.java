@@ -2,6 +2,17 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import Util.Helper;
+import java.security.*;
+import java.security.spec.*;
+import java.security.spec.EncodedKeySpec.*;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class Bob {
 
@@ -11,6 +22,43 @@ public class Bob {
 
     public static void main(String[] args) throws IOException{
         Encrypt_Type enc_type = Encrypt_Type.NONE;
+        // Adds a new provider, at a specified position. 1 is most preferred, followed by 2, and so on.
+        Security.insertProviderAt(new BouncyCastleProvider(), 1);
+        // Key init
+        PublicKey alicepub;
+        PublicKey bobpub;
+        PrivateKey bobpriv;
+        try {
+            KeyFactory keyGen = KeyFactory.getInstance("RSA", "BC");
+        
+            // Generate Bob Public Key
+            FileInputStream bobfis = new FileInputStream("./Key/BobPublicKey.key");
+            byte[] bobpubArray = new byte[bobfis.available()];
+            bobfis.read(bobpubArray);
+            bobfis.close();
+            X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(bobpubArray);
+            bobpub = keyGen.generatePublic(pubKeySpec);
+
+            // Genrate Alice Public Key
+            FileInputStream alicefis = new FileInputStream("./Key/AlicePublicKey.key");
+            byte[] alicepubArray = new byte[alicefis.available()];
+            alicefis.read(alicepubArray);
+            alicefis.close();
+            pubKeySpec = new X509EncodedKeySpec(alicepubArray);
+            alicepub = keyGen.generatePublic(pubKeySpec);
+
+            // Generate Bob Private Key
+            bobfis = new FileInputStream("./Key/BobPrivateKey.key");
+            byte[] bobprivArray = new byte[bobfis.available()];
+            bobfis.read(bobprivArray);
+            bobfis.close();
+            PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(bobprivArray);
+            bobpriv = keyGen.generatePrivate(privateKeySpec);
+
+        } catch (Exception e) {
+            System.err.println("Error Reading Keys: " + e.toString());
+            return;
+        }
 
         // Accepting portNummber that is less than Integer.MAX_VALUE
         int portNumber = 3000;
