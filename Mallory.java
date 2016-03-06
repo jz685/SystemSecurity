@@ -97,9 +97,9 @@ public class Mallory {
         while ((inputLine = inputReader.readLine()) != null) {
             System.out.println("Incoming Message: " + inputLine);
             System.out.println("Please choose to read/modify/delete the message: ");
-            String userInput = bufferReader.readLine()); 
+            String userInput = bufferReader.readLine(); 
             
-            outputWriter.println(inputLine);
+            outputWriter.println(userInput);
             if (inputLine == "Quit") {
                 break;
             }
