@@ -19,6 +19,7 @@ public class Gen {
     // private static final SecureRandom random = new SecureRandom();
 
     public static void main(String [] args) throws Exception {
+        // Adds a new provider, at a specified position. 1 is most preferred, followed by 2, and so on.
         Security.insertProviderAt(new BouncyCastleProvider(), 1);
 
         // String passphrase = "The quick brown fox jumped over the lazy brown dog";
@@ -29,9 +30,12 @@ public class Gen {
         // System.out.println(recoveredPlaintext);
 
         try {
+            // Using RSA from BouncyCastle
 			KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA", "BC");
 			SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
-			keyGen.initialize(1024, random);
+            // Standard recommendation factoring keyy length from NIST, >2030
+            // The generation of key length of 7680 are too expensive
+			keyGen.initialize(3072, random);
 			// Generate Alice
 			KeyPair alicepair = keyGen.generateKeyPair();
 			// System.out.println("Public key " + pair.getPublic());
