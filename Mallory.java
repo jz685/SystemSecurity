@@ -3,6 +3,17 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.security.*;
+import java.security.spec.*;
+import java.security.spec.EncodedKeySpec.*;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 
 public class Mallory extends Thread{
@@ -103,6 +114,34 @@ public class Mallory extends Thread{
     }
 
     public static void main(String[] args) throws IOException{
+        // Adds a new provider, at a specified position. 1 is most preferred, followed by 2, and so on.
+        Security.insertProviderAt(new BouncyCastleProvider(), 1);
+        // Key init
+        PublicKey alicepub;
+        PublicKey bobpub;
+        try {
+            KeyFactory keyGen = KeyFactory.getInstance("RSA", "BC");
+        
+            // Generate Bob Public Key
+            FileInputStream bobfis = new FileInputStream("./Key/BobPublicKey.key");
+            byte[] bobpubArray = new byte[bobfis.available()];
+            bobfis.read(bobpubArray);
+            bobfis.close();
+            X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(bobpubArray);
+            bobpub = keyGen.generatePublic(pubKeySpec);
+
+            // Genrate Alice Public Key
+            FileInputStream alicefis = new FileInputStream("./Key/AlicePublicKey.key");
+            byte[] alicepubArray = new byte[alicefis.available()];
+            alicefis.read(alicepubArray);
+            alicefis.close();
+            pubKeySpec = new X509EncodedKeySpec(alicepubArray);
+            alicepub = keyGen.generatePublic(pubKeySpec);
+
+        } catch (Exception e) {
+            System.err.println("Error Reading Keys: " + e.toString());
+            return;
+        }
         // Accepting portNummber that is less than Integer.MAX_VALUE
         int selfportNumber = 2000;
         InetAddress selflocalIP = InetAddress.getLocalHost();
