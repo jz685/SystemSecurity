@@ -2,7 +2,60 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
-public class Mallory {
+public class Mallory extends Thread{
+
+    public static Queue<String> unread_q;
+    public static List<String> message_list;
+    public static PrintWriter outputWriter;
+    public static boolean still_receiving;
+
+    public void run() {
+        System.out.println("Thread Started");
+        BufferedReader bufferReader = new BufferedReader(new InputStreamReader(System.in));
+        String userInput;
+
+        try {
+            System.out.println("IN TRY");
+            while(still_receiving) {
+                System.out.println(unread_q.isEmpty());
+                if (!unread_q.isEmpty()) {
+                    System.out.println("IN IF");
+                    //Get next unread message
+                    String nextMessage = unread_q.remove();
+                    message_list.add(nextMessage);
+
+                    //Print message
+                    System.out.println("Showing next message:");
+                    System.out.println(nextMessage);
+
+                    //Wait until told what to do about the message
+                    boolean proper_response = false;
+                    while (!proper_response) {
+                        System.out.println("Type p to pass, d to delete, m to modify");
+                        userInput = bufferReader.readLine(); 
+                        if (userInput.equalsIgnoreCase("p")) {
+                            outputWriter.println(nextMessage);
+                            proper_response = true;
+                        }
+                        else if (userInput.equalsIgnoreCase("d")) {
+                            proper_response = true;
+                        }
+                        else if (userInput.equalsIgnoreCase("m")) {
+                            System.out.println("Enter a string to pass along:");
+                            userInput = bufferReader.readLine();
+                            outputWriter.println(nextMessage);
+                        }
+                    }
+                }
+            }
+        }
+        catch (IOException e) {
+            System.err.println("Reached an IO exception, exiting");
+            still_receiving = false;
+            return;
+
+        }
+    }
 
     public static void main(String[] args) throws IOException{
         // Accepting portNummber that is less than Integer.MAX_VALUE
@@ -10,6 +63,7 @@ public class Mallory {
         InetAddress selflocalIP = InetAddress.getLocalHost();
         int targetportNumber = 3000;
         InetAddress targetlocalIP = InetAddress.getLocalHost();
+        still_receiving = true;
         // Handle inputs
         if (args == null || args.length == 0) {
             // Nothing
@@ -54,7 +108,6 @@ public class Mallory {
             return;
         }
         // Create IO
-        PrintWriter outputWriter;
         try {
             outputWriter = new PrintWriter(mallorySenSocket.getOutputStream(), true);
         } catch (UnknownHostException e) {
@@ -91,18 +144,25 @@ public class Mallory {
             System.err.println("Cannot Read...");
             return;
         }
+
+        unread_q = new LinkedList<String>();
+        (new Mallory()).start();
+
         String inputLine;
-        BufferedReader bufferReader = new BufferedReader(new InputStreamReader(System.in));
         System.out.println ("Type Message 'Quit' to quit");
-        while ((inputLine = inputReader.readLine()) != null) {
-            System.out.println("Incoming Message: " + inputLine);
-            System.out.println("Please choose to read/modify/delete the message: ");
-            String userInput = bufferReader.readLine(); 
+        while ((inputLine = inputReader.readLine()) != null && still_receiving) {
+            System.out.println("A new message came, enqueueing");
+            unread_q.add(inputLine);
+            System.out.println(unread_q.isEmpty());
+
+            //System.out.println("Incoming Message: " + inputLine);
+            //System.out.println("Please choose to read/modify/delete the message: ");
+            //String userInput = bufferReader.readLine(); 
             
-            outputWriter.println(userInput);
-            if (inputLine == "Quit") {
-                break;
-            }
+            //outputWriter.println(userInput);
+            //if (inputLine == "Quit") {
+            //    break;
+            //}
         }
         outputWriter.close();
         inputReader.close();
