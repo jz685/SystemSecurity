@@ -1,6 +1,9 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 
 public class Mallory extends Thread{
 
@@ -8,6 +11,7 @@ public class Mallory extends Thread{
     public static List<String> message_list;
     public static PrintWriter outputWriter;
     public static boolean still_receiving;
+    private static Lock q_lock;
 
     public void run() {
         System.out.println("Thread Started");
@@ -15,14 +19,13 @@ public class Mallory extends Thread{
         String userInput;
 
         try {
-            System.out.println("IN TRY");
             while(still_receiving) {
-                System.out.println(unread_q.isEmpty());
+                q_lock.lock();
                 if (!unread_q.isEmpty()) {
-                    System.out.println("IN IF");
                     //Get next unread message
                     String nextMessage = unread_q.remove();
                     message_list.add(nextMessage);
+                    q_lock.unlock();
 
                     //Print message
                     System.out.println("Showing next message:");
@@ -41,11 +44,16 @@ public class Mallory extends Thread{
                             proper_response = true;
                         }
                         else if (userInput.equalsIgnoreCase("m")) {
+                            proper_response = true;
                             System.out.println("Enter a string to pass along:");
                             userInput = bufferReader.readLine();
-                            outputWriter.println(nextMessage);
+                            outputWriter.println(userInput);
                         }
                     }
+                }
+                else {
+                    q_lock.unlock();
+                    //print out asking
                 }
             }
         }
@@ -64,6 +72,8 @@ public class Mallory extends Thread{
         int targetportNumber = 3000;
         InetAddress targetlocalIP = InetAddress.getLocalHost();
         still_receiving = true;
+        message_list = new ArrayList<String>();
+        q_lock = new ReentrantLock();
         // Handle inputs
         if (args == null || args.length == 0) {
             // Nothing
@@ -152,8 +162,9 @@ public class Mallory extends Thread{
         System.out.println ("Type Message 'Quit' to quit");
         while ((inputLine = inputReader.readLine()) != null && still_receiving) {
             System.out.println("A new message came, enqueueing");
+            q_lock.lock();
             unread_q.add(inputLine);
-            System.out.println(unread_q.isEmpty());
+            q_lock.unlock();
 
             //System.out.println("Incoming Message: " + inputLine);
             //System.out.println("Please choose to read/modify/delete the message: ");
@@ -164,6 +175,7 @@ public class Mallory extends Thread{
             //    break;
             //}
         }
+        still_receiving = false;
         outputWriter.close();
         inputReader.close();
         clientSocket.close();
