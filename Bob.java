@@ -125,6 +125,56 @@ public class Bob {
         }
         int msg_index = 0;
         String inputLine;
+
+        // --- Insert ---
+        //From Bob's Side
+        String received = ...
+
+        private static final TWO_MINUTES = 2 * 60 * 1000;
+
+        //TODO: PUT A TRY/CATCH STATEMENT
+        java.util.Date date = new java.util.Date();
+        String recipient = inputLine.split(",")[0];
+        String ts_str = inputLine.split(",")[1];
+        String encrypted = inputLine.split(",")[2];
+        String signature = inputeLine.split(",")[3];
+
+        if (!recipient.equals("Bob")) {
+            System.out.println("Wrong recipient in Key transmission protocol.  Shutting down");
+            return;
+        }
+
+        //TODO: PUT A TRY/CATCH STATEMENT
+        Timestamp ts = Timestamp.getValueOf(ts_str);
+        long millis_sent = ts.getTime();
+        long millis_sent_plus_two = millis_sent + TWO_MINUTES;
+        long current_time = System.currentTimeMillis();
+
+        if (!(current_time >= millis_sent && current_time <= millis_sent_plus_two)) {
+            System.out.println("This timestamp is wrong.")
+        }
+
+        //DECRYPT MSG
+        Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
+        cipher.init(Cipher.DECRYPT_MODE, k_b);
+        byte[] unencrypt_bytes = cipher.doFinal(encrypted);
+        String unencrypt_str = new String(unencrypt_bytes);
+        String should_be_alice = unencrypt_str.split(",")[0];
+        if (!should_be_alice.equals("Alice")) {
+            System.out.println("This is a bigtime error.  Encrypted string should have alice in it");
+        }
+        Key kAB = unencrypt_str.split(",")[1];
+
+        //Verify 
+        Signature sig = Signature.getInstance("SHA1withDSA", "SUN");
+        sig.initVerify(k_A); //public key of A
+        sig.update(encrypted.getBytes());
+        boolean verified = sig.verify(signature.getBytes());
+        if (!verified) {
+            System.out.println("SIGNATURE DOESNT WORK!");
+        }
+        // --- End of Insert
+
         while ((inputLine = inputReader.readLine()) != null) {
             switch (enc_type) {
                 case NONE: 

@@ -74,6 +74,8 @@ public class Gen {
             System.err.println("Caught exception " + e.toString());
             return;
         }
+
+
     }
 
     // private static byte [] encrypt(String passphrase, String plaintext) throws Exception {
