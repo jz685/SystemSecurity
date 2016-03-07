@@ -5,17 +5,20 @@ import Util.Helper;
 import java.security.*;
 import java.security.spec.*;
 import java.security.spec.EncodedKeySpec.*;
+import java.sql.Timestamp;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.spec.PBEKeySpec;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class Bob {
 
+    private static final long TWO_MINUTES = 2 * 60 * 1000;
     public enum Encrypt_Type {
         NONE, SYM, MAC, SYMMAC
     }
@@ -128,50 +131,67 @@ public class Bob {
 
         // --- Insert ---
         //From Bob's Side
-        String received = ...
+        if ((inputLine = inputReader.readLine()) != null) {
+            
+            //TODO: PUT A TRY/CATCH STATEMENT
+            String recipient = inputLine.split(",")[0];
+            String ts_str = inputLine.split(",")[1];
+            String encrypted = inputLine.split(",")[2];
+            String signature = inputLine.split(",")[3];
 
-        private static final TWO_MINUTES = 2 * 60 * 1000;
+            if (!recipient.equals("Bob")) {
+                System.out.println("Wrong recipient in Key transmission protocol.  Shutting down");
+                return;
+            }
 
-        //TODO: PUT A TRY/CATCH STATEMENT
-        java.util.Date date = new java.util.Date();
-        String recipient = inputLine.split(",")[0];
-        String ts_str = inputLine.split(",")[1];
-        String encrypted = inputLine.split(",")[2];
-        String signature = inputeLine.split(",")[3];
+            //TODO: PUT A TRY/CATCH STATEMENT
+            Timestamp ts = Timestamp.valueOf(ts_str);
+            long millis_sent = ts.getTime();
+            long millis_sent_plus_two = millis_sent + TWO_MINUTES;
+            long current_time = System.currentTimeMillis();
 
-        if (!recipient.equals("Bob")) {
-            System.out.println("Wrong recipient in Key transmission protocol.  Shutting down");
-            return;
-        }
+            if (!(current_time >= millis_sent && current_time <= millis_sent_plus_two)) {
+                System.out.println("This timestamp is wrong.");
+                return;
+            }
+            String kABStr;
+            try{
+                //DECRYPT MSG
+                Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
+                cipher.init(Cipher.DECRYPT_MODE, bobpriv);
+                byte[] unencrypt_bytes = cipher.doFinal(encrypted.getBytes());
+                String unencrypt_str = new String(unencrypt_bytes);
+                String should_be_alice = unencrypt_str.split(",")[0];
+                if (!should_be_alice.equals("Alice")) {
+                    System.out.println("This is a bigtime error.  Encrypted string should have alice in it");
+                    return;
+                }
+                kABStr = unencrypt_str.split(",")[1];
+            } catch (Exception e) {
+                System.err.println("Error with decrypt " + e.toString());
+                return;
+            }
 
-        //TODO: PUT A TRY/CATCH STATEMENT
-        Timestamp ts = Timestamp.getValueOf(ts_str);
-        long millis_sent = ts.getTime();
-        long millis_sent_plus_two = millis_sent + TWO_MINUTES;
-        long current_time = System.currentTimeMillis();
 
-        if (!(current_time >= millis_sent && current_time <= millis_sent_plus_two)) {
-            System.out.println("This timestamp is wrong.")
-        }
+            //?????? Not Quit Sure ?????//
+            // Thank to http://stackoverflow.com/questions/2778256/how-to-convert-byte-array-to-key-format
+            SecretKey kAB = new SecretKeySpec(kABStr.getBytes(), "AES");
 
-        //DECRYPT MSG
-        Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
-        cipher.init(Cipher.DECRYPT_MODE, k_b);
-        byte[] unencrypt_bytes = cipher.doFinal(encrypted);
-        String unencrypt_str = new String(unencrypt_bytes);
-        String should_be_alice = unencrypt_str.split(",")[0];
-        if (!should_be_alice.equals("Alice")) {
-            System.out.println("This is a bigtime error.  Encrypted string should have alice in it");
-        }
-        Key kAB = unencrypt_str.split(",")[1];
 
-        //Verify 
-        Signature sig = Signature.getInstance("SHA1withDSA", "SUN");
-        sig.initVerify(k_A); //public key of A
-        sig.update(encrypted.getBytes());
-        boolean verified = sig.verify(signature.getBytes());
-        if (!verified) {
-            System.out.println("SIGNATURE DOESNT WORK!");
+            //Verify 
+            try{
+                Signature sig = Signature.getInstance("SHA1withDSA", "SUN");
+                sig.initVerify(alicepub); //public key of A
+                sig.update(encrypted.getBytes());
+                boolean verified = sig.verify(signature.getBytes());
+                if (!verified) {
+                    System.out.println("SIGNATURE DOESNT WORK!");
+                    return;
+                }
+            } catch (Exception e) {
+                System.err.println("Error with Verifying " + e.toString());
+                return;
+            }
         }
         // --- End of Insert
 

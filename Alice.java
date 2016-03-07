@@ -4,10 +4,12 @@ import java.util.*;
 import java.security.*;
 import java.security.spec.*;
 import java.security.spec.EncodedKeySpec.*;
+import java.sql.Timestamp;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
+import javax.crypto.KeyGenerator;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 
@@ -126,10 +128,10 @@ public class Alice {
                 // ALso http://stackoverflow.com/questions/5641326/256bit-aes-cbc-pkcs5padding-with-bouncy-castle
                 SecretKey aesKey;
                 try {
-                    KeyGenerator keygGen = KeyGenerator.getInstance("AES");
+                    KeyGenerator keyGen = KeyGenerator.getInstance("AES");
                     SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
-                    kGen.init(128, random);
-                    aesKey = kGen.generateKey();
+                    keyGen.init(128, random);
+                    aesKey = keyGen.generateKey();
                 } catch (Exception e) {
                     System.err.println("Key Generation Error " + e.toString());
                     return;
@@ -142,7 +144,6 @@ public class Alice {
                 //Many thanks to: http://www.java2s.com/Tutorial/Java/0490__Security/RSAexamplewithOAEPPaddingandrandomkeygeneration.htm 
                 //for the help with RSA OAEP
                 //Many thanks to: https://docs.oracle.com/javase/tutorial/security/apisign/gensig.html for discussing how to sign something
-                Key aesKey; //shared key
                 // String kAB_str = aesKey.toString();
                 byte[] aesKeyByteArray = aesKey.getEncoded();
                 String kAB_str = new String(aesKeyByteArray);
@@ -150,26 +151,33 @@ public class Alice {
                 String b = "Bob";
                 String a = "Alice";
                 //Get starting info
-                java.util.Date date = new java.util.Date();
-                String timeStamp = new Timestamp(date.getTime());
+                Timestamp timeStamp = new Timestamp(System.currentTimeMillis());
                 String to_encrypt = a + "," + kAB_str;
                 byte[] encrypt_input = to_encrypt.getBytes();
                 //Encrypt data
                 SecureRandom random = new SecureRandom();
-                Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
-                cipher.init(Cipher.ENCRYPT_MODE, K_B, random);
-                byte[] encrypted_text = cipher.doFinal(encrypt_input);
-                String encrypted_text_str = new String(encrypted_text);
-                //Sign data
-                Signature dsa = Signature.getInstance("SHA1withDSA", "SUN"); 
-                dsa.initSign(k_a);
-                String to_sign = b + "," + timeStamp + "," + encrypted_text_str;
-                dsa.update(to_sign.getBytes());
-                byte[] signed = dsa.sign();
+                byte[] signed;
+                String encrypted_text_str;
+                try{
+                    Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
+                    cipher.init(Cipher.ENCRYPT_MODE, bobpub, random);
+                    byte[] encrypted_text = cipher.doFinal(encrypt_input);
+                    encrypted_text_str = new String(encrypted_text);
+                    //Sign data
+                    Signature dsa = Signature.getInstance("SHA1withDSA", "SUN"); 
+                    dsa.initSign(alicepriv);
+                    String to_sign = b + "," + timeStamp + "," + encrypted_text_str;
+                    dsa.update(to_sign.getBytes());
+                    signed = dsa.sign();
+                } catch (Exception e) {
+                    System.err.println("Encription Error " + e.toString());
+                    return;
+                }
                 String signed_str = new String(signed);
                 //Generate final string
                 String ktp_msg = b + "," + timeStamp + "," + encrypted_text_str + "," + signed_str;
                 // ---- End of Enc ----
+                outputWriter.println(ktp_msg);
             case MAC:
             case SYMMAC:
         }
@@ -192,6 +200,7 @@ public class Alice {
                     }
                     break;
                 case SYM:
+
                 case MAC:
                 case SYMMAC:
             }
