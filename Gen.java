@@ -35,7 +35,7 @@ public class Gen {
 			SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
             // Standard recommendation factoring keyy length from NIST, >2030
             // The generation of key length of 7680 are too expensive
-			keyGen.initialize(3072, random);
+			keyGen.initialize(3076, random);
 			// Generate Alice
 			KeyPair alicepair = keyGen.generateKeyPair();
 			// System.out.println("Public key " + pair.getPublic());

@@ -1,3 +1,19 @@
+//Acknowledgements:
+// ----------- AES KEY -------------
+//http://stackoverflow.com/questions/15554296/simple-java-aes-encrypt-decrypt-example
+//http://stackoverflow.com/questions/5641326/256bit-aes-cbc-pkcs5padding-with-bouncy-castle
+
+// ----------- RSA OAEP -------------
+//http://www.java2s.com/Tutorial/Java/0490__Security/RSAexamplewithOAEPPaddingandrandomkeygeneration.htm 
+
+// ----------- Signatures -------------
+//https://docs.oracle.com/javase/tutorial/security/apisign/gensig.html
+
+// ------------ Sending objects through sockets -------------
+//http://stackoverflow.com/questions/19217420/sending-an-object-through-a-socket-in-java
+
+
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -15,7 +31,50 @@ import javax.crypto.spec.PBEKeySpec;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+class MSG_NO_ENC implements Serializable{
+    public int msg_num;
+    public String msg;
+
+    public MSG_NO_ENC(String msg_to_send, int num_msg) {
+        msg_num = num_msg;
+        msg = msg_to_send;
+    }
+}
+
+class KEY_TRANSPORT implements Serializable{
+    public String entity;
+    public Timestamp ts;
+    public byte[] enc;
+    public ArrayList<byte[]> signed;
+
+    public KEY_TRANSPORT(String ent, Timestamp t, byte[] encoded, ArrayList<byte[]> signature) {
+        entity = ent;
+        ts = t; 
+        enc = encoded;
+        signed = signature;
+    }
+}
+
+class MSG_SYM implements Serializable{
+    public int msg_num;
+    public byte[] enc;
+
+    public MSG_SYM(byte[] encode, int num_msg) {
+        msg_num = num_msg;
+        enc = encode;
+    }
+}
+
 public class Alice {
+
+    private static String delimit = "THIS IS A DELIMITER!";
+    private static final int rsa_max_bytes = 374;
+    private static PublicKey bobpub;
+    private static PublicKey alicepub;
+    private static PrivateKey alicepriv;
+    //private static PrintWriter outputWriter;
+    private static ObjectOutputStream outputObject;
+    private static SecretKey aesKey;
 
     public enum Encrypt_Type {
         NONE, SYM, MAC, SYMMAC
@@ -25,9 +84,6 @@ public class Alice {
         // Adds a new provider, at a specified position. 1 is most preferred, followed by 2, and so on.
         Security.insertProviderAt(new BouncyCastleProvider(), 1);
         // Key init
-        PublicKey alicepub;
-        PublicKey bobpub;
-        PrivateKey alicepriv;
         try {
             KeyFactory keyGen = KeyFactory.getInstance("RSA", "BC");
             // Generate Bob Public Key
@@ -40,18 +96,19 @@ public class Alice {
             // Genrate Alice Public Key
             FileInputStream alicefis = new FileInputStream("./Key/AlicePublicKey.key");
             byte[] alicepubArray = new byte[alicefis.available()];
+            System.out.println("Length of Alice's public key is " +alicepubArray.length);
             alicefis.read(alicepubArray);
             alicefis.close();
             pubKeySpec = new X509EncodedKeySpec(alicepubArray);
             alicepub = keyGen.generatePublic(pubKeySpec);
             // Generate Alice Private Key
-            alicefis = new FileInputStream("./Key/alicePrivateKey.key");
+            alicefis = new FileInputStream("./Key/AlicePrivateKey.key");
             byte[] aliceprivArray = new byte[alicefis.available()];
+            System.out.println("Length of Alice's private key is " +aliceprivArray.length);
             alicefis.read(aliceprivArray);
             alicefis.close();
             PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(aliceprivArray);
             alicepriv = keyGen.generatePrivate(privateKeySpec);
-
         } catch (Exception e) {
             System.err.println("Error Reading Keys: " + e.toString());
             return;
@@ -107,9 +164,10 @@ public class Alice {
             return;
         }
         // Create IO
-        PrintWriter outputWriter;
         try {
-            outputWriter = new PrintWriter(aliceSocket.getOutputStream(), true);
+            //outputWriter = new PrintWriter(aliceSocket.getOutputStream(), true);
+            outputObject = new ObjectOutputStream(aliceSocket.getOutputStream());
+
         } catch (UnknownHostException e) {
             System.err.println("Error with the host");
             return;
@@ -121,92 +179,120 @@ public class Alice {
         // Get std input from typing and transmit
 
         switch(enc_type) {
-                case NONE:
-                case SYM:
-                //// ------- AES --------
-                // Thanks to http://stackoverflow.com/questions/15554296/simple-java-aes-encrypt-decrypt-example
-                // ALso http://stackoverflow.com/questions/5641326/256bit-aes-cbc-pkcs5padding-with-bouncy-castle
-                SecretKey aesKey;
+            case NONE:
+                break;
+            case SYM:
                 try {
-                    KeyGenerator keyGen = KeyGenerator.getInstance("AES");
-                    SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
-                    keyGen.init(128, random);
-                    aesKey = keyGen.generateKey();
-                } catch (Exception e) {
-                    System.err.println("Key Generation Error " + e.toString());
-                    return;
+                    key_transport_sym();
                 }
-                // cipher
-                // Cipher encryptCipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-                // encryptCipher.init(Cipher.ENCRYPT_MODE, aesKey);
-                // ---- Enc ----
-                //From Alice's Side
-                //Many thanks to: http://www.java2s.com/Tutorial/Java/0490__Security/RSAexamplewithOAEPPaddingandrandomkeygeneration.htm 
-                //for the help with RSA OAEP
-                //Many thanks to: https://docs.oracle.com/javase/tutorial/security/apisign/gensig.html for discussing how to sign something
-                // String kAB_str = aesKey.toString();
-                byte[] aesKeyByteArray = aesKey.getEncoded();
-                String kAB_str = new String(aesKeyByteArray);
-                String format = aesKey.getFormat();
-                String b = "Bob";
-                String a = "Alice";
-                //Get starting info
-                Timestamp timeStamp = new Timestamp(System.currentTimeMillis());
-                String to_encrypt = a + "," + kAB_str;
-                byte[] encrypt_input = to_encrypt.getBytes();
-                //Encrypt data
-                SecureRandom random = new SecureRandom();
-                byte[] signed;
-                String encrypted_text_str;
-                try{
-                    Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
-                    cipher.init(Cipher.ENCRYPT_MODE, bobpub, random);
-                    byte[] encrypted_text = cipher.doFinal(encrypt_input);
-                    encrypted_text_str = new String(encrypted_text);
-                    //Sign data
-                    Signature dsa = Signature.getInstance("SHA1withDSA", "SUN"); 
-                    dsa.initSign(alicepriv);
-                    String to_sign = b + "," + timeStamp + "," + encrypted_text_str;
-                    dsa.update(to_sign.getBytes());
-                    signed = dsa.sign();
-                } catch (Exception e) {
-                    System.err.println("Encription Error " + e.toString());
-                    return;
+                catch (Exception e) {
+                    System.err.println("Error in the key transport protocol for option SYM");
+                                System.err.println(e.getMessage());
+
                 }
-                String signed_str = new String(signed);
-                //Generate final string
-                String ktp_msg = b + "," + timeStamp + "," + encrypted_text_str + "," + signed_str;
-                // ---- End of Enc ----
-                outputWriter.println(ktp_msg);
+                break;
             case MAC:
             case SYMMAC:
+                try {
+                    key_transport_sym();
+                }
+                catch (Exception e) {
+                    System.err.println("Error in the key transport protocol for option SYMMAC");
+                    System.err.println(e.getMessage());
+                }
         }
 
         BufferedReader bufferReader = new BufferedReader(new InputStreamReader(System.in));
         String userInput;
         int message_count = 0;
-        System.out.println ("Type Message 'Quit' to quit");
+        System.out.println ("Type Message:");
         while ((userInput = bufferReader.readLine()) != null) {
-            if (userInput.equals("Quit")) {
-                break;
-            }
             switch(enc_type) {
                 case NONE:
-                    outputWriter.println((message_count++) + "," + userInput);
+                    MSG_NO_ENC next_msg = new MSG_NO_ENC(userInput, message_count++);
+                    outputObject.writeObject(next_msg); 
                     if (message_count == Integer.MAX_VALUE) {
                         System.out.println("Max messages have been sent, breaking connection");
-                        //NOTE: Do we just want to send over a different session key on max messages?
                         return;
                     }
                     break;
                 case SYM:
+                    //byte[] encoded = 
+                    //MSG_SYM next_msg = new MSG_SYM()
 
                 case MAC:
                 case SYMMAC:
             }
         }
-        outputWriter.close();
+        //outputWriter.close();
+        outputObject.close();
         bufferReader.close();
         aliceSocket.close();
+    }
+
+
+    private static void key_transport_sym() throws Exception{
+        //// ------- GENERATE AES KEY --------
+        try {
+            KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+            SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
+            keyGen.init(256, random);
+            aesKey = keyGen.generateKey();
+        } catch (Exception e) {
+            System.err.println("Key Generation Error " + e.toString());
+            return;
+        }
+
+        //// ------- ENCRYPT --------
+        byte[] aesKeyByteArray = aesKey.getEncoded();
+        String kAB_str = new String(aesKeyByteArray);
+        String format = aesKey.getFormat();
+        String b = "Bob";
+        String a = "Alice";
+        Timestamp timeStamp = new Timestamp(System.currentTimeMillis());
+        String to_encrypt = a + delimit + kAB_str;
+        byte[] encrypt_input = to_encrypt.getBytes();
+
+        SecureRandom random = new SecureRandom();
+        String encrypted_text_str;
+        byte[] encrypted_text;
+        ArrayList<byte[]> signed = new ArrayList<byte[]>();
+        try {
+            Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
+            cipher.init(Cipher.ENCRYPT_MODE, bobpub, random);
+            encrypted_text = cipher.doFinal(encrypt_input);
+            encrypted_text_str = new String(encrypted_text);
+            System.out.println("Encrypted!!!  Text is: ");
+            System.out.println(encrypted_text_str);
+
+            //Sign data
+            Signature dsa = Signature.getInstance("RSA", "BC"); 
+            System.out.println("BEFORE ALICE PRIV");
+            dsa.initSign(alicepriv);
+
+            // ------------- SIGNING -----------------
+            System.out.println("AFTER ALICE PRIV");
+            String to_sign = b + delimit + timeStamp + delimit + encrypted_text_str;
+            int string_ind = rsa_max_bytes;
+            String to_sign_substr = "";
+            for (int i = 0; i <= to_sign.length()/rsa_max_bytes; i++) {
+                System.out.println("In loop");
+                if (string_ind > to_sign.length()) {
+                    string_ind = to_sign.length();
+                }
+                to_sign_substr = to_sign.substring((i * rsa_max_bytes), string_ind);
+                dsa.update(to_sign_substr.getBytes(), 0, to_sign_substr.length());
+                byte[] signed_sub_bytes = dsa.sign();
+                signed.add(signed_sub_bytes);
+                System.out.println("NUMBER in the arraylist was " + (new String(signed_sub_bytes)));
+            }
+        } catch (Exception e) {
+            System.err.println("Encription Error " + e.toString());
+            return;
+        }
+        //Generate final string
+        System.err.println("BEFORE TRANSPORT OBJ");
+        KEY_TRANSPORT transport_obj = new KEY_TRANSPORT(b, timeStamp, encrypted_text, signed);
+        outputObject.writeObject(transport_obj); 
     }
 }

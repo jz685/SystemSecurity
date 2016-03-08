@@ -1,3 +1,7 @@
+//Acknowledgements:
+// Byte array to key: http://stackoverflow.com/questions/2778256/how-to-convert-byte-array-to-key-format
+//http://stackoverflow.com/questions/19217420/sending-an-object-through-a-socket-in-java
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -16,9 +20,53 @@ import javax.crypto.spec.PBEKeySpec;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+class MSG_NO_ENC implements Serializable{
+    public int msg_num;
+    public String msg;
+
+    public MSG_NO_ENC(String msg_to_send, int num_msg) {
+        msg_num = num_msg;
+        msg_to_send = msg;
+    }
+}
+
+class MSG_SYM implements Serializable{
+    public int msg_num;
+    public byte[] enc;
+
+    public MSG_SYM(byte[] encode, int num_msg) {
+        msg_num = num_msg;
+        enc = encode;
+    }
+}
+
+class KEY_TRANSPORT implements Serializable {
+    public String entity;
+    public Timestamp ts;
+    public byte[] enc;
+    public ArrayList<byte[]> signed;
+
+    public KEY_TRANSPORT(String ent, Timestamp t, byte[] encoded, ArrayList<byte[]> signature) {
+        entity = ent;
+        ts = t; 
+        enc = encoded;
+        signed = signature;
+    }
+}
+
 public class Bob {
 
     private static final long TWO_MINUTES = 2 * 60 * 1000;
+    private static final String delimit = "THIS IS A DELIMITER!";
+    private static final int rsa_max_bytes = 374;
+    private static ObjectInputStream objInp;
+    private static PublicKey bobpub;
+    private static PrivateKey bobpriv;
+    private static PublicKey alicepub;
+    private static SecretKey symKey;
+
+
+
     public enum Encrypt_Type {
         NONE, SYM, MAC, SYMMAC
     }
@@ -28,9 +76,6 @@ public class Bob {
         // Adds a new provider, at a specified position. 1 is most preferred, followed by 2, and so on.
         Security.insertProviderAt(new BouncyCastleProvider(), 1);
         // Key init
-        PublicKey alicepub;
-        PublicKey bobpub;
-        PrivateKey bobpriv;
         try {
             KeyFactory keyGen = KeyFactory.getInstance("RSA", "BC");
         
@@ -119,9 +164,10 @@ public class Bob {
         }
         System.out.println("Connected...");
         // Read
-        BufferedReader inputReader;
+        //BufferedReader inputReader;
         try {
-            inputReader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            //inputReader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            objInp = new ObjectInputStream(clientSocket.getInputStream());
         } catch (IOException e) {
             System.err.println("Cannot Read...");
             return;
@@ -129,73 +175,31 @@ public class Bob {
         int msg_index = 0;
         String inputLine;
 
-        // --- Insert ---
-        //From Bob's Side
-        if ((inputLine = inputReader.readLine()) != null) {
-            
-            //TODO: PUT A TRY/CATCH STATEMENT
-            String recipient = inputLine.split(",")[0];
-            String ts_str = inputLine.split(",")[1];
-            String encrypted = inputLine.split(",")[2];
-            String signature = inputLine.split(",")[3];
-
-            if (!recipient.equals("Bob")) {
-                System.out.println("Wrong recipient in Key transmission protocol.  Shutting down");
-                return;
-            }
-
-            //TODO: PUT A TRY/CATCH STATEMENT
-            Timestamp ts = Timestamp.valueOf(ts_str);
-            long millis_sent = ts.getTime();
-            long millis_sent_plus_two = millis_sent + TWO_MINUTES;
-            long current_time = System.currentTimeMillis();
-
-            if (!(current_time >= millis_sent && current_time <= millis_sent_plus_two)) {
-                System.out.println("This timestamp is wrong.");
-                return;
-            }
-            String kABStr;
-            try{
-                //DECRYPT MSG
-                Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
-                cipher.init(Cipher.DECRYPT_MODE, bobpriv);
-                byte[] unencrypt_bytes = cipher.doFinal(encrypted.getBytes());
-                String unencrypt_str = new String(unencrypt_bytes);
-                String should_be_alice = unencrypt_str.split(",")[0];
-                if (!should_be_alice.equals("Alice")) {
-                    System.out.println("This is a bigtime error.  Encrypted string should have alice in it");
+        switch (enc_type) {
+            case NONE:
+                try {
+                    read_non_enc_msgs();
+                }
+                catch (Exception e) {
+                    System.err.println("Error in receiving non encrypted messages:" + e.getMessage());
+                }
+            case SYM:
+                try {
+                    KEY_TRANSPORT key_transport = (KEY_TRANSPORT) objInp.readObject();
+                    int response = check_sym_key_transport(key_transport);
+                    if (response == -1) {
+                        return;
+                    }
+                }
+                catch (Exception e) {
+                    System.err.println("Error in receiving the key_transport from Alice.  Shutting down");
                     return;
                 }
-                kABStr = unencrypt_str.split(",")[1];
-            } catch (Exception e) {
-                System.err.println("Error with decrypt " + e.toString());
-                return;
-            }
-
-
-            //?????? Not Quit Sure ?????//
-            // Thank to http://stackoverflow.com/questions/2778256/how-to-convert-byte-array-to-key-format
-            SecretKey kAB = new SecretKeySpec(kABStr.getBytes(), "AES");
-
-
-            //Verify 
-            try{
-                Signature sig = Signature.getInstance("SHA1withDSA", "SUN");
-                sig.initVerify(alicepub); //public key of A
-                sig.update(encrypted.getBytes());
-                boolean verified = sig.verify(signature.getBytes());
-                if (!verified) {
-                    System.out.println("SIGNATURE DOESNT WORK!");
-                    return;
-                }
-            } catch (Exception e) {
-                System.err.println("Error with Verifying " + e.toString());
-                return;
-            }
+                break;
+            case MAC:
+            case SYMMAC:
         }
-        // --- End of Insert
-
-        while ((inputLine = inputReader.readLine()) != null) {
+        /*while ((inputLine = inputReader.readLine()) != null) {
             switch (enc_type) {
                 case NONE: 
                     if (inputLine == "Quit") {
@@ -227,8 +231,88 @@ public class Bob {
                 case MAC:
                 case SYMMAC:
             }
-        }
-        inputReader.close();
+        }*/
+        //inputReader.close();
+        objInp.close();
         clientSocket.close();
+    }
+
+    private static void read_non_enc_msgs() throws Exception{
+        int msg_num = 0;
+        MSG_NO_ENC next_message;
+        while ((next_message = (MSG_NO_ENC)objInp.readObject()) != null) {
+            if (msg_num++ != next_message.msg_num) {
+                System.err.println("Received a message with the wrong message number.  Suspecting attack, shutting down connection.");
+                return;
+            }
+            System.out.println("Printing message number " + msg_num + ":");
+            System.out.println(next_message.msg);
+        }
+        return;
+    }
+
+
+
+    private static int check_sym_key_transport(KEY_TRANSPORT key_t) throws Exception{
+        if (!(key_t.entity).equals("Bob")) {
+            System.err.println("Wrong recipient in Key transmission protocol.  Shutting down connection.");
+            return -1;
+        }
+        Timestamp ts = key_t.ts;
+        long millis_sent = ts.getTime();
+        long millis_sent_plus_two = millis_sent + TWO_MINUTES;
+        long current_time = System.currentTimeMillis();
+
+        if (!(current_time >= millis_sent && current_time <= millis_sent_plus_two)) {
+            System.err.println("The timestamp is past due.  Shutting down connection.");
+            return -1;
+        }
+
+        String kABStr;
+        try {
+            //DECRYPT MSG
+            //System.out.println("IN DECRYPT");
+            Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
+            cipher.init(Cipher.DECRYPT_MODE, bobpriv);
+            //System.out.println("out of init");
+            byte[] encrypted = key_t.enc;
+            byte[] unencrypt_bytes = cipher.doFinal(encrypted);
+            String unencrypt_str = new String(unencrypt_bytes);
+            String should_be_alice = unencrypt_str.split(delimit)[0];
+            //System.out.println("unencrypted str is " + unencrypt_str);
+            //System.out.println("Should be alice is " + should_be_alice);
+            if (!should_be_alice.equals("Alice")) {
+                System.out.println("Encrypted string should have been sent from alice");
+                return -1;
+            }
+            kABStr = unencrypt_str.split(delimit)[1];
+            symKey = new SecretKeySpec(kABStr.getBytes(), "AES");
+
+            //CHECK SIGNATURE
+            Signature sig = Signature.getInstance("RSA", "BC");
+            sig.initVerify(alicepub); //public key of A
+            
+            String signed_str = "Bob" + delimit + ts + delimit + (new String(encrypted));
+            int string_ind = rsa_max_bytes;
+            String signed_substr;
+            for (int i = 0; i <= signed_str.length()/rsa_max_bytes; i++) {
+                if (string_ind > signed_str.length()) {
+                    string_ind = signed_str.length();
+                }
+                signed_substr = signed_str.substring((i * rsa_max_bytes), string_ind);
+                sig.update(signed_substr.getBytes(), 0, signed_substr.length());
+                boolean verified = sig.verify(key_t.signed.get(i)); 
+                //System.out.println("NUMBER in the arraylist was " + new String(key_t.signed.get(i)));
+                //System.out.println("For iteration " + i + ", the output was " + verified);
+                if (verified != true) {
+                    System.err.println("Signature does not check out.  Closing connection.");
+                    return -1;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error with the sym key: " + e.toString());
+            return -1;
+        }
+        return 1;
     }
 }
