@@ -30,18 +30,22 @@ import java.sql.Timestamp;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.KeyGenerator;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.Mac;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 class MSG_NO_ENC implements Serializable{
+    public String entity;
     public int msg_num;
     public String msg;
 
-    public MSG_NO_ENC(String msg_to_send, int num_msg) {
+    public MSG_NO_ENC(String ent, String msg_to_send, int num_msg) {
+        entity = ent;
         msg_num = num_msg;
         msg = msg_to_send;
     }
@@ -62,14 +66,33 @@ class KEY_TRANSPORT implements Serializable{
 }
 
 class MSG_SYM implements Serializable{
+    public String entity;
     public int msg_num;
     public byte[] enc;
     public byte[] theIV;
 
-    public MSG_SYM(byte[] encode, int num_msg, byte[] generatedIV) {
+    public MSG_SYM(String ent, byte[] encode, int num_msg, byte[] generatedIV) {
+        entity = ent;
         msg_num = num_msg;
         enc = encode;
         theIV = generatedIV;
+    }
+}
+
+class MSG_MAC implements Serializable{
+    public String entity;
+    public int msg_num;
+    public String msg;
+    public byte[] macSig;
+    public String mac_str;
+
+
+    public MSG_MAC(String ent, String message, int num_msg, byte[] macS, String mac) {
+        entity = ent;
+        macSig = macS;
+        msg_num = num_msg;
+        msg = message;
+        mac_str = mac;
     }
 }
 
@@ -196,11 +219,11 @@ public class Alice {
                 }
                 catch (Exception e) {
                     System.err.println("Error in the key transport protocol for option SYM");
-                                System.err.println(e.getMessage());
-
+                    System.err.println(e.getMessage());
                 }
                 break;
             case MAC:
+                break;
             case SYMMAC:
                 try {
                     key_transport_sym();
@@ -209,6 +232,7 @@ public class Alice {
                     System.err.println("Error in the key transport protocol for option SYMMAC");
                     System.err.println(e.getMessage());
                 }
+                break;
         }
 
         BufferedReader bufferReader = new BufferedReader(new InputStreamReader(System.in));
@@ -218,7 +242,7 @@ public class Alice {
         while ((userInput = bufferReader.readLine()) != null) {
             switch(enc_type) {
                 case NONE:
-                    MSG_NO_ENC next_msg = new MSG_NO_ENC(userInput, message_count++);
+                    MSG_NO_ENC next_msg = new MSG_NO_ENC("Bob", userInput, message_count++);
                     outputObject.writeObject(next_msg); 
                     if (message_count == Integer.MAX_VALUE) {
                         System.out.println("Max messages have been sent, breaking connection");
@@ -230,20 +254,42 @@ public class Alice {
                     byte[] ivbytes = generateIV();
                     IvParameterSpec theIV = new IvParameterSpec(ivbytes);
                     byte[] encodedMessage = encode(aesKey, theIV, userInput.getBytes());
-                    MSG_SYM next_msg_Enc = new MSG_SYM(encodedMessage, message_count++, ivbytes);
+                    MSG_SYM next_msg_Enc = new MSG_SYM("Bob", encodedMessage, message_count++, ivbytes);
                     outputObject.writeObject(next_msg_Enc); 
                     if (message_count == Integer.MAX_VALUE) {
                         System.out.println("Max messages have been sent, breaking connection");
                         return;
                     }
                     break;
-                    //byte[] encoded = 
-                    //MSG_SYM next_msg = new MSG_SYM()
-                    
-                    // outputObject.writeObject(transport_obj);
-
                 case MAC:
+                    try {
+                        KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA1", "BC");
+                        SecretKey signingKey = keyGen.generateKey();
+                        byte[] signingKeyByteArray = signingKey.getEncoded();
+                        String mac_str = Base64.getEncoder().encodeToString(signingKeyByteArray);
+                        SecretKeySpec macKey = new SecretKeySpec(signingKeyByteArray, "HmacSHA1"); 
+                        // // get an hmac_sha1 key from the raw key bytes
+                        // SecretKeySpec signingKey = new SecretKeySpec(key.getBytes(), HMAC_SHA1_ALGORITHM);
+                        // get an hmac_sha1 Mac instance and initialize with the signing key
+                        Mac mac = Mac.getInstance("HmacSHA1", "BC");
+                        mac.init(macKey);
+                        // compute the hmac on input data bytes
+                        byte[] rawHmac = mac.doFinal(userInput.getBytes());
+                        // // base64-encode the hmac
+                        // result = Encoding.EncodeBase64(rawHmac);
+                        MSG_MAC next_msg_Mac = new MSG_MAC("Bob", userInput, message_count++, rawHmac, mac_str);
+                        outputObject.writeObject(next_msg_Mac); 
+                        if (message_count == Integer.MAX_VALUE) {
+                            System.out.println("Max messages have been sent, breaking connection");
+                            return;
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Failed to generate HMAC : " + e.getMessage());
+                        return;
+                    }
+                    break;
                 case SYMMAC:
+                    break;
             }
         }
         //outputWriter.close();
@@ -285,8 +331,6 @@ public class Alice {
         return byteIV;
     }
 
-
-
     private static void key_transport_sym() throws Exception{
         //// ------- GENERATE AES KEY --------
         try {
@@ -295,7 +339,7 @@ public class Alice {
             keyGen.init(256, random);
             aesKey = keyGen.generateKey();
             // Print Key to verify
-            System.out.println("The Key is: " + Base64.getEncoder().encodeToString(aesKey.getEncoded()));
+            System.out.println("The AES Key is: " + Base64.getEncoder().encodeToString(aesKey.getEncoded()));
         } catch (Exception e) {
             System.err.println("Key Generation Error " + e.toString());
             return;
