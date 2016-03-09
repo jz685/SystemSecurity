@@ -2,6 +2,9 @@
 // Byte array to key: http://stackoverflow.com/questions/2778256/how-to-convert-byte-array-to-key-format
 //http://stackoverflow.com/questions/19217420/sending-an-object-through-a-socket-in-java
 
+// -------------RSA CBC mode ---------------
+//https://gist.github.com/mythosil/1313541
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -33,10 +36,12 @@ class MSG_NO_ENC implements Serializable{
 class MSG_SYM implements Serializable{
     public int msg_num;
     public byte[] enc;
+    public byte[] theIV;
 
-    public MSG_SYM(byte[] encode, int num_msg) {
+    public MSG_SYM(byte[] encode, int num_msg, byte[] generatedIV) {
         msg_num = num_msg;
         enc = encode;
+        theIV = generatedIV;
     }
 }
 
@@ -195,6 +200,12 @@ public class Bob {
                     System.err.println("Error in receiving the key_transport from Alice.  Shutting down");
                     return;
                 }
+                try {
+                    read_enc_msgs();
+                } 
+                catch (Exception e) {
+                    System.err.println("Error in receiving non encrypted messages:" + e.getMessage());
+                }
                 break;
             case MAC:
             case SYMMAC:
@@ -237,6 +248,27 @@ public class Bob {
         clientSocket.close();
     }
 
+    private static byte[] encode(SecretKey skey, IvParameterSpec iv, byte[] data) {
+        return process(Cipher.ENCRYPT_MODE, skey, iv, data);
+    }
+
+    private static byte[] decode(SecretKey skey, IvParameterSpec iv, byte[] data) {
+        return process(Cipher.DECRYPT_MODE, skey, iv, data);
+    }
+
+    private static byte[] process(int mode, SecretKey skey, IvParameterSpec iv, byte[] data) {
+        // SecretKeySpec key = new SecretKeySpec(skey.getBytes(), "AES");
+        // AlgorithmParameterSpec param = new IvParameterSpec(iv.getBytes());
+        try {
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            cipher.init(mode, skey, iv);
+            return cipher.doFinal(data);
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
     private static void read_non_enc_msgs() throws Exception{
         int msg_num = 0;
         MSG_NO_ENC next_message;
@@ -251,6 +283,27 @@ public class Bob {
         return;
     }
 
+    private static void read_enc_msgs() throws Exception{
+        int msg_num = 0;
+        MSG_SYM next_message;
+        while ((next_message = (MSG_SYM)objInp.readObject()) != null) {
+            if (msg_num++ != next_message.msg_num) {
+                System.err.println("Received a message with the wrong message number.  Suspecting attack, shutting down connection.");
+                return;
+            }
+            byte[] ivbytes = next_message.theIV;
+            IvParameterSpec iv = new IvParameterSpec(ivbytes);
+            byte[] encMessage = next_message.enc;
+            byte[] decodedMessage = decode(symKey, iv, encMessage);
+
+            System.out.println("Printing message number " + msg_num + ":");
+            System.out.println("Encoded Message: " + new String(encMessage));
+            System.out.println("Dncoded Message: " + new String(decodedMessage));
+            System.out.println("----------");
+
+        }
+        return;
+    }
 
 
     private static int check_sym_key_transport(KEY_TRANSPORT key_t) throws Exception{
@@ -286,7 +339,11 @@ public class Bob {
                 return -1;
             }
             kABStr = unencrypt_str.split(delimit)[1];
-            symKey = new SecretKeySpec(kABStr.getBytes(), "AES");
+            byte[] symKeyBytes = Base64.getDecoder().decode(kABStr);
+            symKey = new SecretKeySpec(symKeyBytes, 0, symKeyBytes.length, "AES"); 
+            // symKey = new SecretKeySpec(kABStr.getBytes(), "AES");
+            //Print the Key
+            System.out.println("The Key is: " + Base64.getEncoder().encodeToString(symKey.getEncoded()));
 
             //CHECK SIGNATURE
             Signature sig = Signature.getInstance("RSA", "BC");

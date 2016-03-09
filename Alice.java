@@ -12,6 +12,12 @@
 // ------------ Sending objects through sockets -------------
 //http://stackoverflow.com/questions/19217420/sending-an-object-through-a-socket-in-java
 
+// -------------RSA CBC mode ---------------
+//https://gist.github.com/mythosil/1313541
+
+// -------------IV generation and if it is need to kept secret ----------
+// http://security.stackexchange.com/questions/17044/when-using-aes-and-cbc-is-it-necessary-to-keep-the-iv-secret
+
 
 
 import java.io.*;
@@ -58,10 +64,12 @@ class KEY_TRANSPORT implements Serializable{
 class MSG_SYM implements Serializable{
     public int msg_num;
     public byte[] enc;
+    public byte[] theIV;
 
-    public MSG_SYM(byte[] encode, int num_msg) {
+    public MSG_SYM(byte[] encode, int num_msg, byte[] generatedIV) {
         msg_num = num_msg;
         enc = encode;
+        theIV = generatedIV;
     }
 }
 
@@ -75,6 +83,7 @@ public class Alice {
     //private static PrintWriter outputWriter;
     private static ObjectOutputStream outputObject;
     private static SecretKey aesKey;
+    private static SecureRandom r = new SecureRandom();
 
     public enum Encrypt_Type {
         NONE, SYM, MAC, SYMMAC
@@ -217,8 +226,21 @@ public class Alice {
                     }
                     break;
                 case SYM:
+                    // Timestamp timeStamp = new Timestamp(System.currentTimeMillis());
+                    byte[] ivbytes = generateIV();
+                    IvParameterSpec theIV = new IvParameterSpec(ivbytes);
+                    byte[] encodedMessage = encode(aesKey, theIV, userInput.getBytes());
+                    MSG_SYM next_msg_Enc = new MSG_SYM(encodedMessage, message_count++, ivbytes);
+                    outputObject.writeObject(next_msg_Enc); 
+                    if (message_count == Integer.MAX_VALUE) {
+                        System.out.println("Max messages have been sent, breaking connection");
+                        return;
+                    }
+                    break;
                     //byte[] encoded = 
                     //MSG_SYM next_msg = new MSG_SYM()
+                    
+                    // outputObject.writeObject(transport_obj);
 
                 case MAC:
                 case SYMMAC:
@@ -230,6 +252,40 @@ public class Alice {
         aliceSocket.close();
     }
 
+    // https://gist.github.com/mythosil/1313541
+    private static byte[] encode(SecretKey skey, IvParameterSpec iv, byte[] data) {
+        return process(Cipher.ENCRYPT_MODE, skey, iv, data);
+    }
+
+    private static byte[] decode(SecretKey skey, IvParameterSpec iv, byte[] data) {
+        return process(Cipher.DECRYPT_MODE, skey, iv, data);
+    }
+
+    private static byte[] process(int mode, SecretKey skey, IvParameterSpec iv, byte[] data) {
+        // SecretKeySpec key = new SecretKeySpec(skey.getBytes(), "AES");
+        // AlgorithmParameterSpec param = new IvParameterSpec(iv.getBytes());
+        try {
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            cipher.init(mode, skey, iv);
+            return cipher.doFinal(data);
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static byte[] generateIV() {
+
+        byte[] newSeed = r.generateSeed(16);
+        r.setSeed(newSeed);
+
+        byte[] byteIV = new byte[16];
+        r.nextBytes(byteIV);
+        // IvParameterSpec IV = new IvParameterSpec(byteIV);
+        return byteIV;
+    }
+
+
 
     private static void key_transport_sym() throws Exception{
         //// ------- GENERATE AES KEY --------
@@ -238,6 +294,8 @@ public class Alice {
             SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
             keyGen.init(256, random);
             aesKey = keyGen.generateKey();
+            // Print Key to verify
+            System.out.println("The Key is: " + Base64.getEncoder().encodeToString(aesKey.getEncoded()));
         } catch (Exception e) {
             System.err.println("Key Generation Error " + e.toString());
             return;
@@ -245,7 +303,8 @@ public class Alice {
 
         //// ------- ENCRYPT --------
         byte[] aesKeyByteArray = aesKey.getEncoded();
-        String kAB_str = new String(aesKeyByteArray);
+        // String kAB_str = new String(aesKeyByteArray);
+        String kAB_str = Base64.getEncoder().encodeToString(aesKeyByteArray);
         String format = aesKey.getFormat();
         String b = "Bob";
         String a = "Alice";
