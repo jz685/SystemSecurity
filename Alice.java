@@ -84,15 +84,12 @@ class MSG_MAC implements Serializable{
     public int msg_num;
     public String msg;
     public byte[] macSig;
-    public String mac_str;
 
-
-    public MSG_MAC(String ent, String message, int num_msg, byte[] macS, String mac) {
+    public MSG_MAC(String ent, String message, int num_msg, byte[] macS) {
         entity = ent;
         macSig = macS;
         msg_num = num_msg;
         msg = message;
-        mac_str = mac;
     }
 }
 
@@ -107,6 +104,8 @@ public class Alice {
     private static ObjectOutputStream outputObject;
     private static SecretKey aesKey;
     private static SecureRandom r = new SecureRandom();
+    private static SecretKeySpec macKey;
+    private static String mac_str;
 
     public enum Encrypt_Type {
         NONE, SYM, MAC, SYMMAC
@@ -223,6 +222,13 @@ public class Alice {
                 }
                 break;
             case MAC:
+                try {
+                    mac_transport_sym();
+                }
+                catch (Exception e) {
+                    System.err.println("Error in the mac transport protocol for option MAC");
+                    System.err.println(e.getMessage());
+                }
                 break;
             case SYMMAC:
                 try {
@@ -263,21 +269,14 @@ public class Alice {
                     break;
                 case MAC:
                     try {
-                        KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA1", "BC");
-                        SecretKey signingKey = keyGen.generateKey();
-                        byte[] signingKeyByteArray = signingKey.getEncoded();
-                        String mac_str = Base64.getEncoder().encodeToString(signingKeyByteArray);
-                        SecretKeySpec macKey = new SecretKeySpec(signingKeyByteArray, "HmacSHA1"); 
-                        // // get an hmac_sha1 key from the raw key bytes
-                        // SecretKeySpec signingKey = new SecretKeySpec(key.getBytes(), HMAC_SHA1_ALGORITHM);
-                        // get an hmac_sha1 Mac instance and initialize with the signing key
                         Mac mac = Mac.getInstance("HmacSHA1", "BC");
                         mac.init(macKey);
                         // compute the hmac on input data bytes
                         byte[] rawHmac = mac.doFinal(userInput.getBytes());
                         // // base64-encode the hmac
                         // result = Encoding.EncodeBase64(rawHmac);
-                        MSG_MAC next_msg_Mac = new MSG_MAC("Bob", userInput, message_count++, rawHmac, mac_str);
+                        MSG_MAC next_msg_Mac  = new MSG_MAC("Bob", userInput, message_count++, rawHmac);
+                        // MSG_MAC next_msg_Mac = new MSG_MAC("Bob", userInput, message_count++, rawHmac);
                         outputObject.writeObject(next_msg_Mac); 
                         if (message_count == Integer.MAX_VALUE) {
                             System.out.println("Max messages have been sent, breaking connection");
@@ -331,6 +330,67 @@ public class Alice {
         return byteIV;
     }
 
+    private static void mac_transport_sym() throws Exception{
+        //// ------- GENERATE AES KEY --------
+        try {
+            KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA1", "BC");
+            SecretKey signingKey = keyGen.generateKey();
+            byte[] signingKeyByteArray = signingKey.getEncoded();
+            mac_str = Base64.getEncoder().encodeToString(signingKeyByteArray);
+            macKey = macKey = new SecretKeySpec(signingKeyByteArray, "HmacSHA1");
+            // Print Key to verify
+            System.out.println("The MAC Key is: " + Base64.getEncoder().encodeToString(macKey.getEncoded()));
+        } catch (Exception e) {
+            System.err.println("Key Generation Error " + e.toString());
+            return;
+        }
+        //// ------- ENCRYPT --------
+        String b = "Bob";
+        String a = "Alice";
+        Timestamp timeStamp = new Timestamp(System.currentTimeMillis());
+        String to_encrypt = a + delimit + mac_str;
+        byte[] encrypt_input = to_encrypt.getBytes();
+        SecureRandom random = new SecureRandom();
+        String encrypted_text_str;
+        byte[] encrypted_text;
+        ArrayList<byte[]> signed = new ArrayList<byte[]>();
+        try {
+            Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
+            cipher.init(Cipher.ENCRYPT_MODE, bobpub, random);
+            encrypted_text = cipher.doFinal(encrypt_input);
+            encrypted_text_str = new String(encrypted_text);
+            // System.out.println("Encrypted!!!  Text is: ");
+            // System.out.println(encrypted_text_str);
+            //Sign data
+            Signature dsa = Signature.getInstance("RSA", "BC"); 
+            // System.out.println("BEFORE ALICE PRIV");
+            dsa.initSign(alicepriv);
+            // ------------- SIGNING -----------------
+            // System.out.println("AFTER ALICE PRIV");
+            String to_sign = b + delimit + timeStamp + delimit + encrypted_text_str;
+            int string_ind = rsa_max_bytes;
+            String to_sign_substr = "";
+            for (int i = 0; i <= to_sign.length()/rsa_max_bytes; i++) {
+                // System.out.println("In loop");
+                if (string_ind > to_sign.length()) {
+                    string_ind = to_sign.length();
+                }
+                to_sign_substr = to_sign.substring((i * rsa_max_bytes), string_ind);
+                dsa.update(to_sign_substr.getBytes(), 0, to_sign_substr.length());
+                byte[] signed_sub_bytes = dsa.sign();
+                signed.add(signed_sub_bytes);
+                // System.out.println("NUMBER in the arraylist was " + (new String(signed_sub_bytes)));
+            }
+        } catch (Exception e) {
+            System.err.println("Encription Error " + e.toString());
+            return;
+        }
+        //Generate final string
+        // System.err.println("BEFORE TRANSPORT OBJ");
+        KEY_TRANSPORT transport_obj = new KEY_TRANSPORT(b, timeStamp, encrypted_text, signed);
+        outputObject.writeObject(transport_obj); 
+    }
+
     private static void key_transport_sym() throws Exception{
         //// ------- GENERATE AES KEY --------
         try {
@@ -365,21 +425,14 @@ public class Alice {
             cipher.init(Cipher.ENCRYPT_MODE, bobpub, random);
             encrypted_text = cipher.doFinal(encrypt_input);
             encrypted_text_str = new String(encrypted_text);
-            System.out.println("Encrypted!!!  Text is: ");
-            System.out.println(encrypted_text_str);
-
             //Sign data
             Signature dsa = Signature.getInstance("RSA", "BC"); 
-            System.out.println("BEFORE ALICE PRIV");
             dsa.initSign(alicepriv);
-
             // ------------- SIGNING -----------------
-            System.out.println("AFTER ALICE PRIV");
             String to_sign = b + delimit + timeStamp + delimit + encrypted_text_str;
             int string_ind = rsa_max_bytes;
             String to_sign_substr = "";
             for (int i = 0; i <= to_sign.length()/rsa_max_bytes; i++) {
-                System.out.println("In loop");
                 if (string_ind > to_sign.length()) {
                     string_ind = to_sign.length();
                 }
@@ -387,14 +440,14 @@ public class Alice {
                 dsa.update(to_sign_substr.getBytes(), 0, to_sign_substr.length());
                 byte[] signed_sub_bytes = dsa.sign();
                 signed.add(signed_sub_bytes);
-                System.out.println("NUMBER in the arraylist was " + (new String(signed_sub_bytes)));
+                // System.out.println("NUMBER in the arraylist was " + (new String(signed_sub_bytes)));
             }
         } catch (Exception e) {
             System.err.println("Encription Error " + e.toString());
             return;
         }
         //Generate final string
-        System.err.println("BEFORE TRANSPORT OBJ");
+        // System.err.println("BEFORE TRANSPORT OBJ");
         KEY_TRANSPORT transport_obj = new KEY_TRANSPORT(b, timeStamp, encrypted_text, signed);
         outputObject.writeObject(transport_obj); 
     }

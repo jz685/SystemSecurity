@@ -91,6 +91,8 @@ public class Bob {
     private static PrivateKey bobpriv;
     private static PublicKey alicepub;
     private static SecretKey symKey;
+    private static SecretKeySpec macKey;
+    private static String mac_str;
 
 
 
@@ -232,6 +234,17 @@ public class Bob {
                 break;
             case MAC:
                 try {
+                    KEY_TRANSPORT key_transport = (KEY_TRANSPORT) objInp.readObject();
+                    int response = check_mac_key_transport(key_transport);
+                    if (response == -1) {
+                        return;
+                    }
+                }
+                catch (Exception e) {
+                    System.err.println("Error in receiving the mac_key_transport from Alice.  Shutting down");
+                    return;
+                }
+                try {
                     read_mac_msgs();
                 } 
                 catch (Exception e) {
@@ -332,10 +345,10 @@ public class Bob {
             }
             String msg = next_message.msg;
             byte[] macSig = next_message.macSig;
-            String mac_str = next_message.mac_str;
+            // String mac_str = next_message.mac_str;
             
-            byte[] macKeyBytes = Base64.getDecoder().decode(mac_str);
-            SecretKeySpec macKey = new SecretKeySpec(macKeyBytes, "HmacSHA1"); 
+            // byte[] macKeyBytes = Base64.getDecoder().decode(mac_str);
+            // SecretKeySpec macKey = new SecretKeySpec(macKeyBytes, "HmacSHA1"); 
             Mac mac = Mac.getInstance("HmacSHA1", "BC");
             mac.init(macKey);
             byte[] rawHmac = mac.doFinal(msg.getBytes());
@@ -380,6 +393,70 @@ public class Bob {
         return;
     }
 
+    private static int check_mac_key_transport(KEY_TRANSPORT key_t) throws Exception{
+        if (!(key_t.entity).equals("Bob")) {
+            System.err.println("Wrong recipient in Key transmission protocol.  Shutting down connection.");
+            return -1;
+        }
+        Timestamp ts = key_t.ts;
+        long millis_sent = ts.getTime();
+        long millis_sent_plus_two = millis_sent + TWO_MINUTES;
+        long current_time = System.currentTimeMillis();
+
+        if (!(current_time >= millis_sent && current_time <= millis_sent_plus_two)) {
+            System.err.println("The timestamp is past due.  Shutting down connection.");
+            return -1;
+        }
+        try {
+            //DECRYPT MSG
+            //System.out.println("IN DECRYPT");
+            Cipher cipher = Cipher.getInstance("RSA/None/OAEPWithSHA1AndMGF1Padding", "BC");
+            cipher.init(Cipher.DECRYPT_MODE, bobpriv);
+            //System.out.println("out of init");
+            byte[] encrypted = key_t.enc;
+            byte[] unencrypt_bytes = cipher.doFinal(encrypted);
+            String unencrypt_str = new String(unencrypt_bytes);
+            String should_be_alice = unencrypt_str.split(delimit)[0];
+            //System.out.println("unencrypted str is " + unencrypt_str);
+            //System.out.println("Should be alice is " + should_be_alice);
+            if (!should_be_alice.equals("Alice")) {
+                System.out.println("Encrypted string should have been sent from alice");
+                return -1;
+            }
+            mac_str = unencrypt_str.split(delimit)[1];
+            byte[] macKeyBytes = Base64.getDecoder().decode(mac_str);
+            macKey = new SecretKeySpec(macKeyBytes, "HmacSHA1"); 
+            // symKey = new SecretKeySpec(kABStr.getBytes(), "AES");
+            //Print the Key
+            System.out.println("The MAC Key is: " + Base64.getEncoder().encodeToString(macKey.getEncoded()));
+
+            //CHECK SIGNATURE
+            Signature sig = Signature.getInstance("RSA", "BC");
+            sig.initVerify(alicepub); //public key of A
+            
+            String signed_str = "Bob" + delimit + ts + delimit + (new String(encrypted));
+            int string_ind = rsa_max_bytes;
+            String signed_substr;
+            for (int i = 0; i <= signed_str.length()/rsa_max_bytes; i++) {
+                if (string_ind > signed_str.length()) {
+                    string_ind = signed_str.length();
+                }
+                signed_substr = signed_str.substring((i * rsa_max_bytes), string_ind);
+                sig.update(signed_substr.getBytes(), 0, signed_substr.length());
+                boolean verified = sig.verify(key_t.signed.get(i)); 
+                //System.out.println("NUMBER in the arraylist was " + new String(key_t.signed.get(i)));
+                //System.out.println("For iteration " + i + ", the output was " + verified);
+                if (verified != true) {
+                    System.err.println("Signature does not check out.  Closing connection.");
+                    return -1;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error with the sym key: " + e.toString());
+            return -1;
+        }
+        return 1;
+    }
 
     private static int check_sym_key_transport(KEY_TRANSPORT key_t) throws Exception{
         if (!(key_t.entity).equals("Bob")) {
