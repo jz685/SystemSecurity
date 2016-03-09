@@ -81,6 +81,22 @@ class MSG_MAC implements Serializable{
     }
 }
 
+class MSG_SYMMAC implements Serializable{
+    public String entity;
+    public int msg_num;
+    public byte[] enc;
+    public byte[] theIV;
+    public byte[] macSig;
+
+    public MSG_SYMMAC(String ent, byte[] encode, int num_msg, byte[] generatedIV, byte[] macS) {
+        entity = ent;
+        msg_num = num_msg;
+        enc = encode;
+        theIV = generatedIV;
+        macSig = macS;
+    }
+}
+
 public class Bob {
 
     private static final long TWO_MINUTES = 2 * 60 * 1000;
@@ -252,6 +268,34 @@ public class Bob {
                 }
                 break;
             case SYMMAC:
+                try {
+                    KEY_TRANSPORT key_transport = (KEY_TRANSPORT) objInp.readObject();
+                    int response = check_sym_key_transport(key_transport);
+                    if (response == -1) {
+                        return;
+                    }
+                }
+                catch (Exception e) {
+                    System.err.println("Error in receiving the key_transport from Alice.  Shutting down");
+                    return;
+                }
+                try {
+                    KEY_TRANSPORT key_transport = (KEY_TRANSPORT) objInp.readObject();
+                    int response = check_mac_key_transport(key_transport);
+                    if (response == -1) {
+                        return;
+                    }
+                }
+                catch (Exception e) {
+                    System.err.println("Error in receiving the mac_key_transport from Alice.  Shutting down");
+                    return;
+                }
+                try {
+                    read_encmac_msgs();
+                } 
+                catch (Exception e) {
+                    System.err.println("Error in receiving mac messages:" + e.getMessage());
+                }
                 break;
         }
         /*while ((inputLine = inputReader.readLine()) != null) {
@@ -388,6 +432,41 @@ public class Bob {
             // System.out.println("Encoded Message: " + new String(encMessage));
             System.out.println("Dncoded Message: " + new String(decodedMessage));
             System.out.println("----------");
+
+        }
+        return;
+    }
+
+    private static void read_encmac_msgs() throws Exception{
+        int msg_num = 0;
+        MSG_SYMMAC next_message;
+        while ((next_message = (MSG_SYMMAC)objInp.readObject()) != null) {
+            if (msg_num++ != next_message.msg_num) {
+                System.err.println("Received a message with the wrong message number.  Suspecting attack, shutting down connection.");
+                return;
+            }
+            if (!(next_message.entity).equals("Bob")) {
+                System.err.println("Wrong recipient in transmission protocol. Shutting down connection.");
+                return;
+            }
+            byte[] ivbytes = next_message.theIV;
+            IvParameterSpec iv = new IvParameterSpec(ivbytes);
+            byte[] encMessage = next_message.enc;
+            byte[] decodedMessage = decode(symKey, iv, encMessage);
+
+            byte[] macSig = next_message.macSig;
+            Mac mac = Mac.getInstance("HmacSHA1", "BC");
+            mac.init(macKey);
+            byte[] rawHmac = mac.doFinal(encMessage);
+            if (Arrays.equals(rawHmac, macSig)) {
+                System.out.println("Printing message number " + msg_num + ":");
+                // System.out.println("Encoded Message: " + new String(encMessage));
+                System.out.println("Dncoded Message: " + new String(decodedMessage));
+                System.out.println("----------");
+            } else {
+                System.out.println("MAC sig does not match, we are under attack, abort.");
+                return;
+            }
 
         }
         return;

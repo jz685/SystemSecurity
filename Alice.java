@@ -93,6 +93,22 @@ class MSG_MAC implements Serializable{
     }
 }
 
+class MSG_SYMMAC implements Serializable{
+    public String entity;
+    public int msg_num;
+    public byte[] enc;
+    public byte[] theIV;
+    public byte[] macSig;
+
+    public MSG_SYMMAC(String ent, byte[] encode, int num_msg, byte[] generatedIV, byte[] macS) {
+        entity = ent;
+        msg_num = num_msg;
+        enc = encode;
+        theIV = generatedIV;
+        macSig = macS;
+    }
+}
+
 public class Alice {
 
     private static String delimit = "THIS IS A DELIMITER!";
@@ -238,6 +254,13 @@ public class Alice {
                     System.err.println("Error in the key transport protocol for option SYMMAC");
                     System.err.println(e.getMessage());
                 }
+                try {
+                    mac_transport_sym();
+                }
+                catch (Exception e) {
+                    System.err.println("Error in the mac transport protocol for option MAC");
+                    System.err.println(e.getMessage());
+                }
                 break;
         }
 
@@ -247,7 +270,8 @@ public class Alice {
         System.out.println ("Type Message:");
         while ((userInput = bufferReader.readLine()) != null) {
             switch(enc_type) {
-                case NONE:
+                case NONE: 
+                {
                     MSG_NO_ENC next_msg = new MSG_NO_ENC("Bob", userInput, message_count++);
                     outputObject.writeObject(next_msg); 
                     if (message_count == Integer.MAX_VALUE) {
@@ -255,7 +279,9 @@ public class Alice {
                         return;
                     }
                     break;
+                }
                 case SYM:
+                {
                     // Timestamp timeStamp = new Timestamp(System.currentTimeMillis());
                     byte[] ivbytes = generateIV();
                     IvParameterSpec theIV = new IvParameterSpec(ivbytes);
@@ -267,7 +293,9 @@ public class Alice {
                         return;
                     }
                     break;
+                }
                 case MAC:
+                {
                     try {
                         Mac mac = Mac.getInstance("HmacSHA1", "BC");
                         mac.init(macKey);
@@ -287,8 +315,29 @@ public class Alice {
                         return;
                     }
                     break;
+                }
                 case SYMMAC:
+                {
+                    try {
+                        byte[] ivbytes = generateIV();
+                        IvParameterSpec theIV = new IvParameterSpec(ivbytes);
+                        byte[] encodedMessage = encode(aesKey, theIV, userInput.getBytes());
+                        Mac mac = Mac.getInstance("HmacSHA1", "BC");
+                        mac.init(macKey);
+                        byte[] rawHmac = mac.doFinal(encodedMessage);
+                        // Send
+                        MSG_SYMMAC next_msg_EncMac = new MSG_SYMMAC("Bob", encodedMessage, message_count++, ivbytes, rawHmac);
+                        outputObject.writeObject(next_msg_EncMac); 
+                        if (message_count == Integer.MAX_VALUE) {
+                            System.out.println("Max messages have been sent, breaking connection");
+                            return;
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Failed to generate SYMMAC : " + e.getMessage());
+                        return;
+                    }
                     break;
+                }
             }
         }
         //outputWriter.close();
