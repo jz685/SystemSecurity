@@ -226,7 +226,7 @@ public class Bob {
             //inputReader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             objInp = new ObjectInputStream(clientSocket.getInputStream());
         } catch (IOException e) {
-            System.err.println("Cannot Read...");
+            System.err.println("Exception with stream, aborting");
             return;
         }
         int msg_index = 0;
@@ -238,7 +238,7 @@ public class Bob {
                     read_non_enc_msgs();
                 }
                 catch (Exception e) {
-                    System.err.println("Error in receiving non encrypted messages:" + e.getMessage());
+                    System.err.println("Error in receiving non encrypted messages, suspecting attack.  Aborting.");
                 }
                 break;
             case SYM:
@@ -257,7 +257,7 @@ public class Bob {
                     read_enc_msgs();
                 } 
                 catch (Exception e) {
-                    System.err.println("Error in receiving encrypted messages:" + e.getMessage());
+                    System.err.println("Error in receiving encrypted messages.  Suspecting attack.  Aborting.";
                 }
                 break;
             case MAC:
@@ -276,7 +276,7 @@ public class Bob {
                     read_mac_msgs();
                 } 
                 catch (Exception e) {
-                    System.err.println("Error in receiving mac messages:" + e.getMessage());
+                    System.err.println("Error in receiving mac messages.  suspecting attack.  aborting.");
                 }
                 break;
             case SYMMAC:
@@ -306,7 +306,7 @@ public class Bob {
                     read_encmac_msgs();
                 } 
                 catch (Exception e) {
-                    System.err.println("Error in receiving mac messages:" + e.getMessage());
+                    System.err.println("Error in receiving symmac messages.  suspecting attack.  Aborting.");
                 }
                 break;
         }
@@ -442,7 +442,7 @@ public class Bob {
 
             System.out.println("Printing message number " + msg_num + ":");
             // System.out.println("Encoded Message: " + new String(encMessage));
-            System.out.println("Dncoded Message: " + new String(decodedMessage));
+            System.out.println("Decoded Message: " + new String(decodedMessage));
             System.out.println("----------");
 
         }
@@ -610,7 +610,7 @@ public class Bob {
                 }
             }
         } catch (Exception e) {
-            System.err.println("Error with the sym key: " + e.toString());
+            System.err.println("Error with the sym key, suspecting attack.  Aborting. ");
             return -1;
         }
         return 1;

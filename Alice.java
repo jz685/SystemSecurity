@@ -288,7 +288,13 @@ public class Alice {
                 case NONE: 
                 {
                     MSG_NO_ENC next_msg = new MSG_NO_ENC("Bob", userInput, message_count++);
-                    outputObject.writeObject(next_msg); 
+                    try {
+                        outputObject.writeObject(next_msg); 
+                    }
+                    catch (SocketException e) {
+                        System.out.println("stream closed, exiting.");
+                        return;
+                    }
                     if (message_count == Integer.MAX_VALUE) {
                         System.out.println("Max messages have been sent, breaking connection");
                         return;
@@ -302,7 +308,13 @@ public class Alice {
                     IvParameterSpec theIV = new IvParameterSpec(ivbytes);
                     byte[] encodedMessage = encode(aesKey, theIV, userInput.getBytes());
                     MSG_SYM next_msg_Enc = new MSG_SYM("Bob", encodedMessage, message_count++, ivbytes);
-                    outputObject.writeObject(next_msg_Enc); 
+                    try {
+                        outputObject.writeObject(next_msg_Enc); 
+                    }
+                    catch (SocketException e) {
+                        System.out.println("stream closed, exiting");
+                        return;
+                    }
                     if (message_count == Integer.MAX_VALUE) {
                         System.out.println("Max messages have been sent, breaking connection");
                         return;
@@ -320,7 +332,13 @@ public class Alice {
                         // result = Encoding.EncodeBase64(rawHmac);
                         MSG_MAC next_msg_Mac  = new MSG_MAC("Bob", userInput, message_count++, rawHmac);
                         // MSG_MAC next_msg_Mac = new MSG_MAC("Bob", userInput, message_count++, rawHmac);
-                        outputObject.writeObject(next_msg_Mac); 
+                        try {
+                            outputObject.writeObject(next_msg_Mac); 
+                        }
+                        catch (SocketException e) {
+                            System.out.println("stream closed, exiting");
+                            return;
+                        }
                         if (message_count == Integer.MAX_VALUE) {
                             System.out.println("Max messages have been sent, breaking connection");
                             return;
@@ -342,7 +360,13 @@ public class Alice {
                         byte[] rawHmac = mac.doFinal(encodedMessage);
                         // Send
                         MSG_SYMMAC next_msg_EncMac = new MSG_SYMMAC("Bob", encodedMessage, message_count++, ivbytes, rawHmac);
-                        outputObject.writeObject(next_msg_EncMac); 
+                        try {
+                            outputObject.writeObject(next_msg_EncMac); 
+                        }
+                        catch (SocketException e) {
+                            System.out.println("stream closed, exiting");
+                            return;
+                        }
                         if (message_count == Integer.MAX_VALUE) {
                             System.out.println("Max messages have been sent, breaking connection");
                             return;

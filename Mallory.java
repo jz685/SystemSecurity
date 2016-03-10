@@ -47,21 +47,6 @@ class KEY_TRANSPORT implements Serializable{
         enc = encoded;
         signed = signature;
     }
-    // public KEY_TRANSPORT(String ent, String t, String encoded, String signature) {
-    //     entity = ent;
-    //     Timestamp timestamp;
-    //     try{
-    //         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
-    //         Date parsedDate = dateFormat.parse(t);
-    //         timestamp = new java.sql.Timestamp(parsedDate.getTime());
-    //     }catch(Exception e){//this generic but you can control another types of exception
-    //         System.err.println("Converting Error: " + e.toString());
-    //     }
-    //     ts = timestamp; 
-    //     enc = encoded;
-    //     // signed = signature;
-    //     // Don't know how to do this...........!!!!!!!!!!!!!!!!
-    // }
     public String toStr() {
         return "" + entity + " || " + ts + " || " + new String(enc) + " || " + signed.toString();
     }
@@ -191,25 +176,50 @@ public class Mallory extends Thread{
                             // How to Modify????
                             if (nextMessage instanceof MSG_NO_ENC) {
                                 MSG_NO_ENC modifyObj = ((MSG_NO_ENC)nextMessage);
-                                // System.out.println("Incoming Message: " + modifyObj);
+                                int new_msg_num = get_msg_num(modifyObj.msg_num, bufferReader);
+                                String new_msg_content = get_new_msg(modifyObj.msg, bufferReader);
+                                String new_entity = get_msg_entity(modifyObj.entity, bufferReader);
+                                MSG_NO_ENC new_msg = new MSG_NO_ENC(new_entity, new_msg_content, new_msg_num);
+                                outputObject.writeObject(new_msg);
                             } else if (nextMessage instanceof KEY_TRANSPORT) {
                                 KEY_TRANSPORT modifyObj = ((KEY_TRANSPORT)nextMessage);
+                                System.out.println("It would be unwise to change this message, as it will be noticed.");
+
                                 // System.out.println("Incoming Message: " + modifyObj);
                             } else if (nextMessage instanceof MSG_SYM) {
                                 MSG_SYM modifyObj = ((MSG_SYM)nextMessage);
+                                int new_msg_num = get_msg_num(modifyObj.msg_num, bufferReader);
+                                byte[] new_msg_content = get_new_byte_content(modifyObj.enc, bufferReader);
+                                String new_entity = get_msg_entity(modifyObj.entity, bufferReader);
+                                byte[] new_iv = get_new_iv(modifyObj.theIV, bufferReader);
+                                MSG_SYM new_msg = new MSG_SYM(new_entity, new_msg_content, new_msg_num, new_iv);
+                                outputObject.writeObject(new_msg);
                                 // System.out.println("Incoming Message: " + modifyObj);
                             } else if (nextMessage instanceof MSG_MAC) {
                                 MSG_MAC modifyObj = ((MSG_MAC)nextMessage);
+                                int new_msg_num = get_msg_num(modifyObj.msg_num, bufferReader);
+                                String new_msg_content = get_new_msg(modifyObj.msg, bufferReader);
+                                String new_entity = get_msg_entity(modifyObj.entity, bufferReader);
+                                byte[] new_sig = get_new_sig(modifyObj.macSig, bufferReader);
+                                MSG_MAC new_msg = new MSG_MAC(new_entity, new_msg_content, new_msg_num, new_sig);
+                                outputObject.writeObject(new_msg);
                                 // System.out.println("Incoming Message: " + modifyObj);
                             } else if (nextMessage instanceof MSG_SYMMAC) {
                                 MSG_SYMMAC modifyObj = ((MSG_SYMMAC)nextMessage);
+                                String new_entity = get_msg_entity(modifyObj.entity, bufferReader);
+                                int new_msg_num = get_msg_num(modifyObj.msg_num, bufferReader);
+                                byte[] new_msg_content = get_new_byte_content(modifyObj.enc, bufferReader);
+                                byte[] new_iv = get_new_iv(modifyObj.theIV, bufferReader);
+                                byte[] new_sig = get_new_sig(modifyObj.macSig, bufferReader);
+                                MSG_SYMMAC new_msg = new MSG_SYMMAC(new_entity, new_msg_content, new_msg_num, new_iv, new_sig);
+                                outputObject.writeObject(new_msg);
                                 // System.out.println("Incoming Message: " + modifyObj);
                             }
-                            System.out.println("Enter a string to pass along:");
+                            //System.out.println("Enter a string to pass along:");
 
-                            userInput = bufferReader.readLine();
+                            //userInput = bufferReader.readLine();
                             // outputWriter.println(userInput);
-                            outputObject.writeObject(userInput); 
+                            //outputObject.writeObject(userInput); 
                         }
                     }
                 }
@@ -260,6 +270,105 @@ public class Mallory extends Thread{
 
         }
     }
+
+    public static int get_msg_num (int old_msg_num, BufferedReader bufferReader) {
+        System.out.println("Enter new message number, new line to keep the same");
+        try {
+            String userInput = bufferReader.readLine();  
+            int new_msg_num = Integer.parseInt(userInput);
+            return new_msg_num;
+        }  
+        catch (Exception e) {
+            System.out.println("Message num kept the same");
+            return old_msg_num;
+        }
+    }
+
+    public static String get_new_msg (String old_string, BufferedReader bufferReader) {
+        System.out.println("Enter new message content, new line to keep the same");
+        String userInput;
+        try {
+            userInput = bufferReader.readLine();  
+        }
+        catch (Exception e) {
+            System.out.println("Message kept the same.");
+            return old_string; 
+        }
+        if (userInput.length() == 0) {
+            System.out.println("Message kept the same.");
+            return old_string;
+        }
+        return userInput;
+    }
+
+    public static String get_msg_entity (String old_string, BufferedReader bufferReader) {
+        System.out.println("Enter new message entity, new line to keep the same");
+        String userInput;
+        try {
+            userInput = bufferReader.readLine(); 
+        }
+        catch (Exception e) {
+            System.out.println("Entity kept the same.");
+            return old_string;
+        }
+        if (userInput.length() == 0) {
+            System.out.println("Entity kept the same.");
+            return old_string;
+        }
+        return userInput;
+    }
+
+    public static byte[] get_new_byte_content (byte[] old_bytes, BufferedReader bufferReader) {
+        System.out.println("Enter new byte content, new line to keep the same");
+        String userInput;
+        try {
+            userInput = bufferReader.readLine(); 
+        }
+        catch (Exception e) {
+            System.out.println("Content kept the same.");
+            return old_bytes;
+        }
+        if (userInput.length() == 0) {
+            System.out.println("Content kept the same.");
+            return old_bytes;
+        }
+        return userInput.getBytes();
+    }
+
+    public static byte[] get_new_iv (byte[] old_bytes, BufferedReader bufferReader) {
+        System.out.println("Enter new IV, new line to keep the same");
+        String userInput;
+        try {
+            userInput = bufferReader.readLine(); 
+        }
+        catch (Exception e) {
+            System.out.println("IV kept the same.");
+            return old_bytes;
+        }
+        if (userInput.length() == 0) {
+            System.out.println("IV kept the same.");
+            return old_bytes;
+        }
+        return userInput.getBytes();
+    }
+
+    public static byte[] get_new_sig (byte[] old_bytes, BufferedReader bufferReader) {
+        System.out.println("Enter new MAC sig, new line to keep the same");
+        String userInput;
+        try {
+            userInput = bufferReader.readLine(); 
+        }
+        catch (Exception e) {
+            System.out.println("MAC sig kept the same.");
+            return old_bytes;
+        }
+        if (userInput.length() == 0) {
+            System.out.println("MAC sig kept the same.");
+            return old_bytes;
+        }
+        return userInput.getBytes();
+    }
+
 
     public static void main(String[] args) throws IOException{
         // Adds a new provider, at a specified position. 1 is most preferred, followed by 2, and so on.
