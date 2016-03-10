@@ -391,25 +391,25 @@ public class Mallory extends Thread{
         try {
             while ((next_message = objInp.readObject()) != null) {
             // while ((inputLine = inputReader.readLine()) != null && still_receiving) {
-                if (next_message instanceof MSG_NO_ENC) {
-                    inputLine = ((MSG_NO_ENC)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else if (next_message instanceof KEY_TRANSPORT) {
-                    inputLine = ((KEY_TRANSPORT)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else if (next_message instanceof MSG_SYM) {
-                    inputLine = ((MSG_SYM)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else if (next_message instanceof MSG_MAC) {
-                    inputLine = ((MSG_MAC)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else if (next_message instanceof MSG_SYMMAC) {
-                    inputLine = ((MSG_SYMMAC)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else {
-                    System.err.println("Unknown Type, Abort");
-                    return;
-                }
+                // if (next_message instanceof MSG_NO_ENC) {
+                //     inputLine = ((MSG_NO_ENC)next_message).toStr();
+                //     // System.out.println("Incoming Message: " + inputLine);
+                // } else if (next_message instanceof KEY_TRANSPORT) {
+                //     inputLine = ((KEY_TRANSPORT)next_message).toStr();
+                //     // System.out.println("Incoming Message: " + inputLine);
+                // } else if (next_message instanceof MSG_SYM) {
+                //     inputLine = ((MSG_SYM)next_message).toStr();
+                //     // System.out.println("Incoming Message: " + inputLine);
+                // } else if (next_message instanceof MSG_MAC) {
+                //     inputLine = ((MSG_MAC)next_message).toStr();
+                //     // System.out.println("Incoming Message: " + inputLine);
+                // } else if (next_message instanceof MSG_SYMMAC) {
+                //     inputLine = ((MSG_SYMMAC)next_message).toStr();
+                //     // System.out.println("Incoming Message: " + inputLine);
+                // } else {
+                //     System.err.println("Unknown Type, Abort");
+                //     return;
+                // }
 
                 System.out.println("A new message came, enqueueing");
                 q_lock.lock();
