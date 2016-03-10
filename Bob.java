@@ -257,7 +257,7 @@ public class Bob {
                     read_enc_msgs();
                 } 
                 catch (Exception e) {
-                    System.err.println("Error in receiving encrypted messages.  Suspecting attack.  Aborting.";
+                    System.err.println("Error in receiving encrypted messages.  Suspecting attack.  Aborting.");
                 }
                 break;
             case MAC:
@@ -473,7 +473,7 @@ public class Bob {
             if (Arrays.equals(rawHmac, macSig)) {
                 System.out.println("Printing message number " + msg_num + ":");
                 // System.out.println("Encoded Message: " + new String(encMessage));
-                System.out.println("Dncoded Message: " + new String(decodedMessage));
+                System.out.println("Decoded Message: " + new String(decodedMessage));
                 System.out.println("----------");
             } else {
                 System.out.println("MAC sig does not match, we are under attack, abort.");

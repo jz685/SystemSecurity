@@ -184,7 +184,26 @@ public class Mallory extends Thread{
                             } else if (nextMessage instanceof KEY_TRANSPORT) {
                                 KEY_TRANSPORT modifyObj = ((KEY_TRANSPORT)nextMessage);
                                 System.out.println("It would be unwise to change this message, as it will be noticed.");
-
+                                System.out.println("But feel free to enter a string, and we will send it instead.  Enter new line to not change.");
+                                String new_msg = "";
+                                boolean changed = true;
+                                try {
+                                    new_msg = bufferReader.readLine(); 
+                                }
+                                catch (Exception e) {
+                                    System.out.println("message kept the same.");
+                                    changed = false;
+                                }
+                                if (new_msg.length() == 0) {
+                                    System.out.println("message kept the same.");
+                                    changed = false;
+                                }
+                                if (changed) {
+                                    outputObject.writeObject(new_msg);
+                                }
+                                else {
+                                    outputObject.writeObject(nextMessage);
+                                }
                                 // System.out.println("Incoming Message: " + modifyObj);
                             } else if (nextMessage instanceof MSG_SYM) {
                                 MSG_SYM modifyObj = ((MSG_SYM)nextMessage);
@@ -244,7 +263,29 @@ public class Mallory extends Thread{
                                 }
                                 else {
                                     System.out.println("Printing out message number " + read_num + ":");
-                                    System.out.println(message_list.get(read_num));
+
+                                    //System.out.println(message_list.get(read_num));
+                                    Object next_message = message_list.get(read_num);
+                                    if (next_message instanceof MSG_SYM) {
+                                        MSG_SYM next = (MSG_SYM)next_message;
+                                        System.out.println(next.toStr());
+                                    }
+                                    else if (next_message instanceof MSG_NO_ENC) {
+                                        MSG_NO_ENC next = (MSG_NO_ENC)next_message;
+                                        System.out.println(next.toStr());
+                                    }
+                                    else if (next_message instanceof MSG_MAC) {
+                                        MSG_MAC next = (MSG_MAC) next_message;
+                                        System.out.println(next.toStr());
+                                    }
+                                    else if (next_message instanceof MSG_SYMMAC) {
+                                        MSG_SYMMAC next = (MSG_SYMMAC) next_message;
+                                        System.out.println(next.toStr());
+                                    }
+                                    else if (next_message instanceof KEY_TRANSPORT) {
+                                        KEY_TRANSPORT next = (KEY_TRANSPORT) next_message;
+                                        System.out.println(next.toStr());
+                                    }
                                     got_num = true;
                                 }
                             }
