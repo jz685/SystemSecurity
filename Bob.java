@@ -404,8 +404,8 @@ public class Bob {
             // String mac_str = next_message.mac_str;
             
             // byte[] macKeyBytes = Base64.getDecoder().decode(mac_str);
-            // SecretKeySpec macKey = new SecretKeySpec(macKeyBytes, "HmacSHA1"); 
-            Mac mac = Mac.getInstance("HmacSHA1", "BC");
+            // SecretKeySpec macKey = new SecretKeySpec(macKeyBytes, "HMac-SHA224"); 
+            Mac mac = Mac.getInstance("HMac-SHA224", "BC");
             mac.init(macKey);
             byte[] rawHmac = mac.doFinal(msg.getBytes());
             if (Arrays.equals(rawHmac, macSig)) {
@@ -467,7 +467,7 @@ public class Bob {
             byte[] decodedMessage = decode(symKey, iv, encMessage);
 
             byte[] macSig = next_message.macSig;
-            Mac mac = Mac.getInstance("HmacSHA1", "BC");
+            Mac mac = Mac.getInstance("HMac-SHA224", "BC");
             mac.init(macKey);
             byte[] rawHmac = mac.doFinal(encMessage);
             if (Arrays.equals(rawHmac, macSig)) {
@@ -516,7 +516,7 @@ public class Bob {
             }
             mac_str = unencrypt_str.split(delimit)[1];
             byte[] macKeyBytes = Base64.getDecoder().decode(mac_str);
-            macKey = new SecretKeySpec(macKeyBytes, "HmacSHA1"); 
+            macKey = new SecretKeySpec(macKeyBytes, "HMac-SHA224"); 
             // symKey = new SecretKeySpec(kABStr.getBytes(), "AES");
             //Print the Key
             System.out.println("The MAC Key is: " + Base64.getEncoder().encodeToString(macKey.getEncoded()));

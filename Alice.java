@@ -324,7 +324,7 @@ public class Alice {
                 case MAC:
                 {
                     try {
-                        Mac mac = Mac.getInstance("HmacSHA1", "BC");
+                        Mac mac = Mac.getInstance("HMac-SHA224", "BC");
                         mac.init(macKey);
                         // compute the hmac on input data bytes
                         byte[] rawHmac = mac.doFinal(userInput.getBytes());
@@ -355,7 +355,7 @@ public class Alice {
                         byte[] ivbytes = generateIV();
                         IvParameterSpec theIV = new IvParameterSpec(ivbytes);
                         byte[] encodedMessage = encode(aesKey, theIV, userInput.getBytes());
-                        Mac mac = Mac.getInstance("HmacSHA1", "BC");
+                        Mac mac = Mac.getInstance("HMac-SHA224", "BC");
                         mac.init(macKey);
                         byte[] rawHmac = mac.doFinal(encodedMessage);
                         // Send
@@ -421,11 +421,11 @@ public class Alice {
     private static void mac_transport_sym() throws Exception{
         //// ------- GENERATE AES KEY --------
         try {
-            KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA1", "BC");
+            KeyGenerator keyGen = KeyGenerator.getInstance("HMac-SHA224", "BC");
             SecretKey signingKey = keyGen.generateKey();
             byte[] signingKeyByteArray = signingKey.getEncoded();
             mac_str = Base64.getEncoder().encodeToString(signingKeyByteArray);
-            macKey = macKey = new SecretKeySpec(signingKeyByteArray, "HmacSHA1");
+            macKey = macKey = new SecretKeySpec(signingKeyByteArray, "HMac-SHA224");
             // Print Key to verify
             System.out.println("The MAC Key is: " + Base64.getEncoder().encodeToString(macKey.getEncoded()));
         } catch (Exception e) {
