@@ -49,6 +49,9 @@ class MSG_NO_ENC implements Serializable{
         msg_num = num_msg;
         msg = msg_to_send;
     }
+    public String toStr() {
+        return "" + entity + " || " + msg_num + " || " + msg;
+    }
 }
 
 class KEY_TRANSPORT implements Serializable{
@@ -62,6 +65,9 @@ class KEY_TRANSPORT implements Serializable{
         ts = t; 
         enc = encoded;
         signed = signature;
+    }
+    public String toStr() {
+        return "" + entity + " || " + ts + " || " + new String(enc) + " || " + signed.toString();
     }
 }
 
@@ -77,6 +83,9 @@ class MSG_SYM implements Serializable{
         enc = encode;
         theIV = generatedIV;
     }
+    public String toStr() {
+        return "" + entity + " || " + msg_num + " || " + new String(enc) + " || " + new String(theIV);
+    }
 }
 
 class MSG_MAC implements Serializable{
@@ -90,6 +99,9 @@ class MSG_MAC implements Serializable{
         macSig = macS;
         msg_num = num_msg;
         msg = message;
+    }
+    public String toStr() {
+        return "" + entity + " || " + msg_num + " || " + msg + " || " + new String(macSig);
     }
 }
 
@@ -106,6 +118,9 @@ class MSG_SYMMAC implements Serializable{
         enc = encode;
         theIV = generatedIV;
         macSig = macS;
+    }
+    public String toStr() {
+        return "" + entity + " || " + msg_num + " || " + new String(enc) + " || " + new String(theIV) + " || " + new String(macSig);
     }
 }
 

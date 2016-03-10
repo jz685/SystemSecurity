@@ -25,11 +25,6 @@ class MSG_NO_ENC implements Serializable{
         msg_num = num_msg;
         msg = msg_to_send;
     }
-    public MSG_NO_ENC(String ent, String msg_to_send, String num_msg) {
-        entity = ent;
-        msg_num = Integer.parseInt(num_msg);
-        msg = msg_to_send;
-    }
     public String toStr() {
         return "" + entity + " || " + msg_num + " || " + msg;
     }
@@ -47,21 +42,6 @@ class KEY_TRANSPORT implements Serializable{
         enc = encoded;
         signed = signature;
     }
-    // public KEY_TRANSPORT(String ent, String t, String encoded, String signature) {
-    //     entity = ent;
-    //     Timestamp timestamp;
-    //     try{
-    //         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
-    //         Date parsedDate = dateFormat.parse(t);
-    //         timestamp = new java.sql.Timestamp(parsedDate.getTime());
-    //     }catch(Exception e){//this generic but you can control another types of exception
-    //         System.err.println("Converting Error: " + e.toString());
-    //     }
-    //     ts = timestamp; 
-    //     enc = encoded;
-    //     // signed = signature;
-    //     // Don't know how to do this...........!!!!!!!!!!!!!!!!
-    // }
     public String toStr() {
         return "" + entity + " || " + ts + " || " + new String(enc) + " || " + signed.toString();
     }
@@ -78,12 +58,6 @@ class MSG_SYM implements Serializable{
         msg_num = num_msg;
         enc = encode;
         theIV = generatedIV;
-    }
-    public MSG_SYM(String ent, String encode, int num_msg, String generatedIV) {
-        entity = ent;
-        msg_num = num_msg;
-        enc = encode.getBytes();
-        theIV = generatedIV.getBytes();
     }
     public String toStr() {
         return "" + entity + " || " + msg_num + " || " + new String(enc) + " || " + new String(theIV);
@@ -122,7 +96,7 @@ class MSG_SYMMAC implements Serializable{
         macSig = macS;
     }
     public String toStr() {
-        return "" + entity + " || " + msg_num + " || " + new String(enc) + " || " + new String(theIV) + " || " + new String(macSig);
+        return "" + entity + " || " + msg_num + " || " + new String(enc) + " || " + new String(theIV) + " || " + new String(tmacSig);
     }
 }
 
@@ -153,25 +127,8 @@ public class Mallory extends Thread{
                     q_lock.unlock();
 
                     //Print message
-                    String inputLine;
                     System.out.println("Showing next unread message:");
-                    if (nextMessage instanceof MSG_NO_ENC) {
-                        inputLine = ((MSG_NO_ENC)nextMessage).toStr();
-                        System.out.println("Incoming Message: " + inputLine);
-                    } else if (nextMessage instanceof KEY_TRANSPORT) {
-                        inputLine = ((KEY_TRANSPORT)nextMessage).toStr();
-                        System.out.println("Incoming Message: " + inputLine);
-                    } else if (nextMessage instanceof MSG_SYM) {
-                        inputLine = ((MSG_SYM)nextMessage).toStr();
-                        System.out.println("Incoming Message: " + inputLine);
-                    } else if (nextMessage instanceof MSG_MAC) {
-                        inputLine = ((MSG_MAC)nextMessage).toStr();
-                        System.out.println("Incoming Message: " + inputLine);
-                    } else if (nextMessage instanceof MSG_SYMMAC) {
-                        inputLine = ((MSG_SYMMAC)nextMessage).toStr();
-                        System.out.println("Incoming Message: " + inputLine);
-                    }
-                    // System.out.println(nextMessage);
+                    System.out.println(nextMessage);
 
                     //Wait until told what to do about the message
                     boolean proper_response = false;
@@ -180,7 +137,7 @@ public class Mallory extends Thread{
                         userInput = bufferReader.readLine(); 
                         if (userInput.equalsIgnoreCase("p")) {
                             // outputWriter.println(nextMessage);
-                            outputObject.writeObject(nextMessage); 
+                            outputObject.writeObject(next_msg_Mac); 
                             proper_response = true;
                         }
                         else if (userInput.equalsIgnoreCase("d")) {
@@ -189,27 +146,10 @@ public class Mallory extends Thread{
                         else if (userInput.equalsIgnoreCase("m")) {
                             proper_response = true;
                             // How to Modify????
-                            if (nextMessage instanceof MSG_NO_ENC) {
-                                MSG_NO_ENC modifyObj = ((MSG_NO_ENC)nextMessage);
-                                // System.out.println("Incoming Message: " + modifyObj);
-                            } else if (nextMessage instanceof KEY_TRANSPORT) {
-                                KEY_TRANSPORT modifyObj = ((KEY_TRANSPORT)nextMessage);
-                                // System.out.println("Incoming Message: " + modifyObj);
-                            } else if (nextMessage instanceof MSG_SYM) {
-                                MSG_SYM modifyObj = ((MSG_SYM)nextMessage);
-                                // System.out.println("Incoming Message: " + modifyObj);
-                            } else if (nextMessage instanceof MSG_MAC) {
-                                MSG_MAC modifyObj = ((MSG_MAC)nextMessage);
-                                // System.out.println("Incoming Message: " + modifyObj);
-                            } else if (nextMessage instanceof MSG_SYMMAC) {
-                                MSG_SYMMAC modifyObj = ((MSG_SYMMAC)nextMessage);
-                                // System.out.println("Incoming Message: " + modifyObj);
-                            }
                             System.out.println("Enter a string to pass along:");
 
                             userInput = bufferReader.readLine();
-                            // outputWriter.println(userInput);
-                            outputObject.writeObject(userInput); 
+                            outputWriter.println(userInput);
                         }
                     }
                 }
@@ -296,7 +236,7 @@ public class Mallory extends Thread{
         int targetportNumber = 3000;
         InetAddress targetlocalIP = InetAddress.getLocalHost();
         still_receiving = true;
-        message_list = new ArrayList<Object>();
+        message_list = new ArrayList<String>();
         q_lock = new ReentrantLock();
         // Handle inputs
         if (args == null || args.length == 0) {
@@ -388,40 +328,36 @@ public class Mallory extends Thread{
         String inputLine;
         System.out.println ("Type Message 'Quit' to quit");
         Object next_message;
-        try {
-            while ((next_message = objInp.readObject()) != null) {
-            // while ((inputLine = inputReader.readLine()) != null && still_receiving) {
-                if (next_message instanceof MSG_NO_ENC) {
-                    inputLine = ((MSG_NO_ENC)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else if (next_message instanceof KEY_TRANSPORT) {
-                    inputLine = ((KEY_TRANSPORT)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else if (next_message instanceof MSG_SYM) {
-                    inputLine = ((MSG_SYM)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else if (next_message instanceof MSG_MAC) {
-                    inputLine = ((MSG_MAC)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else if (next_message instanceof MSG_SYMMAC) {
-                    inputLine = ((MSG_SYMMAC)next_message).toStr();
-                    System.out.println("Incoming Message: " + inputLine);
-                } else {
-                    System.err.println("Unknown Type, Abort");
-                    return;
-                }
-
-                System.out.println("A new message came, enqueueing");
-                q_lock.lock();
-                unread_q.add(next_message);
-                q_lock.unlock();
+        while ((next_message = objInp.readObject()) != null) {
+        // while ((inputLine = inputReader.readLine()) != null && still_receiving) {
+            if (next_message instanceof MSG_NO_ENC) {
+                inputLine = (MSG_NO_ENC)next_message.toStr();
+                System.out.println("Incoming Message: " + inputLine);
+            } else if (next_message instanceof KEY_TRANSPORT) {
+                inputLine = (KEY_TRANSPORT)next_message.toStr();
+                System.out.println("Incoming Message: " + inputLine);
+            } else if (next_message instanceof MSG_SYM) {
+                inputLine = (MSG_SYM)next_message.toStr();
+                System.out.println("Incoming Message: " + inputLine);
+            } else if (next_message instanceof MSG_MAC) {
+                inputLine = (MSG_MAC)next_message.toStr();
+                System.out.println("Incoming Message: " + inputLine);
+            } else if (next_message instanceof MSG_SYMMAC) {
+                inputLine = (MSG_SYMMAC)next_message.toStr();
+                System.out.println("Incoming Message: " + inputLine);
+            } else {
+                System.error.println("Unknown Type, Abort");
+                return;
             }
-            still_receiving = false;
-        } catch (Exception e) {
-            System.err.println("Error Reading: " + e.toString());
+
+            System.out.println("A new message came, enqueueing");
+            q_lock.lock();
+            unread_q.add(next_message);
+            q_lock.unlock();
         }
+        still_receiving = false;
         outputObject.close();
-        objInp.close();
+        inputReader.close();
         clientSocket.close();
 
     }
